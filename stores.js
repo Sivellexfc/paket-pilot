@@ -71,9 +71,8 @@ function loadStores() {
                     ipcRenderer.invoke('db-delete-store', id).then(res => {
                         if (res.success) {
                             loadStores();
-                            // Notify main window to refresh? 
-                            // Since this is a separate window, we might rely on the main window reloading manually or we send a broadcast.
-                            // For now, standalone management is fine.
+                            // Notify all windows about the change
+                            ipcRenderer.send('notify-stores-updated');
                         } else {
                             alert('Hata: ' + res.message);
                         }
@@ -112,6 +111,8 @@ function saveStore() {
             if (res.success) {
                 closeModal();
                 loadStores();
+                // Notify all windows
+                ipcRenderer.send('notify-stores-updated');
             } else {
                 alert('Güncelleme başarısız: ' + (res.message || ''));
             }
@@ -122,6 +123,8 @@ function saveStore() {
             if (res.success) {
                 closeModal();
                 loadStores();
+                // Notify all windows
+                ipcRenderer.send('notify-stores-updated');
             } else {
                 alert('Ekleme başarısız: ' + (res.message || 'Store already exists?'));
             }

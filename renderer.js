@@ -196,19 +196,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tab Listeners
     if (btnShowTarget) btnShowTarget.addEventListener('click', () => switchRightTab('target'));
 
-    // Sidebar Store Management Button
-    const btnManageStores = document.getElementById('btn-sidebar-manage-stores');
-    if (btnManageStores) {
-        btnManageStores.addEventListener('click', () => {
+    // Sidebar Change Store Button
+    const btnChangeStore = document.getElementById('btn-sidebar-change-store');
+    if (btnChangeStore) {
+        btnChangeStore.addEventListener('click', () => {
             const { ipcRenderer } = require('electron');
-            ipcRenderer.invoke('open-stores-window');
+            ipcRenderer.send('focus-selector-window');
+        });
+    }
+
+    // Sidebar Toggle Logic
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    const mainSidebar = document.getElementById('main-sidebar');
+
+    if (btnToggleSidebar && mainSidebar) {
+        btnToggleSidebar.addEventListener('click', () => {
+            if (mainSidebar.classList.contains('w-64')) {
+                // Close Sidebar
+                mainSidebar.classList.remove('w-64');
+                mainSidebar.classList.add('w-0', 'border-none');
+            } else {
+                // Open Sidebar
+                mainSidebar.classList.add('w-64');
+                mainSidebar.classList.remove('w-0', 'border-none');
+            }
         });
     }
 
     // Listen for updates from other windows
     const { ipcRenderer } = require('electron');
     ipcRenderer.on('stores-updated', () => {
-        initializeStoreLogic(); // Refresh sidebar list
+        // In single-store mode, we don't need to refresh sidebar
+        // Just reload current store data if needed
+        if (currentStore) {
+            ipcRenderer.invoke('db-get-store', currentStore.id).then(store => {
+                if (store) {
+                    currentStore = store;
+                }
+            });
+        }
     });
 
     // Date Picker for Target/Cancels Archive
@@ -294,7 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span class="text-[10px] opacity-90 font-mono">Son kontrol: ${timeText}</span>
+                <span class="text-[10px] opacity-90 font-mono whitespace-nowrap">
+                    <span class="hidden xl:inline">Son kontrol: </span>${timeText}
+                </span>
             </div>
         </div>
     `;
@@ -542,22 +570,76 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- STORE LOGIC ---
 function initializeStoreLogic() {
     const { ipcRenderer } = require('electron');
-    ipcRenderer.invoke('db-get-stores').then(stores => {
-        if (stores.length === 0) {
-            // Show No Store View
+
+    // Listen for store ID from main process
+    ipcRenderer.on('set-store-id', (event, storeId) => {
+        if (!storeId) {
+            console.error('No store ID received');
             switchView('no-store');
             return;
         }
 
-        renderSidebarStores(stores);
+        // Load store details and set as current
+        ipcRenderer.invoke('db-get-store', storeId).then(store => {
+            if (!store) {
+                console.error('Store not found:', storeId);
+                switchView('no-store');
+                return;
+            }
 
-        // Select first store by default if none selected and stores exist
-        if (stores.length > 0 && !currentStore) {
-            switchStore(stores[0]);
+            currentStore = store;
+
+
+
+            // Update document title and Header
+            document.title = `PaketPilot - ${store.name}`;
+            const headerTitle = document.getElementById('header-title');
+            if (headerTitle) headerTitle.textContent = `SİPARİŞ YÖNETİMİ - ${store.name.toUpperCase()}`;
+
+            // Initialize the application for this store
+            switchView('dashboard');
+
+            // Load history
+            loadImportHistory('source');
+            loadImportHistory('target');
+            loadImportHistory('cancels');
+
+            // Load today's archived data
+            loadTodayArchiveToTables();
+
+            // Update settings if needed
+            updateSettingsHeader(store);
+            handleSettingsStoreChange(store.id);
+
+            log.info(`Initialized with store: ${store.name} (ID: ${store.id})`);
+        }).catch(err => {
+            console.error('Error loading store:', err);
+            switchView('no-store');
+        });
+    });
+
+    // Listen for store updates from other windows
+    ipcRenderer.on('stores-updated', () => {
+        // Reload current store data if needed
+        if (currentStore) {
+            ipcRenderer.invoke('db-get-store', currentStore.id).then(store => {
+                if (store) {
+                    currentStore = store;
+                    updateSettingsHeader(store);
+                    // Also update header title on change
+                    document.title = `PaketPilot - ${store.name}`;
+                    const headerTitle = document.getElementById('header-title');
+                    if (headerTitle) headerTitle.textContent = `SİPARİŞ YÖNETİMİ - ${store.name.toUpperCase()}`;
+                }
+            });
         }
     });
 }
 
+// DEPRECATED: These functions are no longer used in single-store-per-window mode
+// Each window now operates on a single store passed from main process
+
+/*
 function renderSidebarStores(stores) {
     const container = document.getElementById('sidebar-store-list');
     if (!container) return;
@@ -656,6 +738,8 @@ function switchStore(store) {
 
     log.info(`Switched to store: ${store.name}`);
 }
+*/
+
 
 function startHeaderClock() {
     const updateTime = () => {
@@ -3432,8 +3516,12 @@ function switchView(viewName) {
     // Reset Buttons
     [btnNavDashboard, btnNavFiles, btnNavSettings, btnNavArchive, btnNavCancelsArchive].forEach(btn => {
         if (btn) {
-            btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
-            btn.classList.add('bg-white', 'text-gray-700', 'border', 'border-gray-200', 'hover:bg-gray-50');
+            // Remove Active Classes
+            btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm', 'hover:bg-blue-700');
+            // Add Inactive Classes (Sidebar Style)
+            btn.classList.add('text-gray-800', 'hover:bg-blue-600', 'hover:text-white');
+            // Ensure no old header styles remain
+            btn.classList.remove('bg-white', 'border', 'border-gray-200', 'hover:bg-gray-50', 'text-gray-700');
         }
     });
 
@@ -3475,8 +3563,10 @@ function switchView(viewName) {
     }
 
     if (targetBtn) {
-        targetBtn.classList.remove('bg-white', 'text-gray-700', 'border', 'border-gray-200', 'hover:bg-gray-50');
-        targetBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        // Remove Inactive Classes
+        targetBtn.classList.remove('text-gray-800', 'hover:bg-blue-600', 'hover:text-white');
+        // Add Active Classes
+        targetBtn.classList.add('bg-blue-600', 'text-white', 'shadow-sm', 'hover:bg-blue-700');
     }
 }
 
@@ -3898,16 +3988,26 @@ async function loadTrendyolCancels() {
 
             const tr = document.createElement('tr');
             tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+            // Helper for short date format (dd.mm.yy HH:MM)
+            const formatDate = (d) => d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+
+            // Truncate product name
+            const productName = item.productName || '-';
+            const shortProductName = productName.length > 12 ? productName.slice(0, 12) + '...' : productName;
+
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date().toLocaleDateString()}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatDate(item.orderDate)}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatDate(item.statusDate)}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 overflow-hidden text-ellipsis max-w-[150px]" title="${item.customer}">${item.customer || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">${item.cargoTrackingNumber || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">${orderNo}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColor}">${status}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">${orderNo}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title="${item.productName || ''}">
-                    <div class="truncate w-64">${item.productName || '-'}</div>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500" title="${productName}">
+                    <div>${shortProductName}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-right">
                     ${actionHtml}
                 </td>
              `;

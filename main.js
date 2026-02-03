@@ -1,12 +1,12 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const sqlite3 = require('sqlite3').verbose()
 const log = require('electron-log');
 
 log.info("Veritabanı Yolu:", path.join(app.getPath('userData'), 'stok-takip.db'));
 
-let mainWindow; // Global reference
-
+let selectorWindow = null; // Store selector window
+let storeWindows = new Map(); // Map of storeId -> BrowserWindow
 
 log.info('Bu mesaj hem dosyaya yazılır hem de konsola basılır');
 
@@ -387,11 +387,80 @@ ipcMain.handle('open-stores-window', () => {
     return { success: true };
 });
 
+// Open a store-specific window
+ipcMain.handle('open-store-window', async (event, storeId) => {
+    if (!storeId) {
+        return { success: false, message: 'Store ID is required' };
+    }
+
+    // Check if already open
+    if (storeWindows.has(storeId)) {
+        const existingWindow = storeWindows.get(storeId);
+        if (!existingWindow.isDestroyed()) {
+            existingWindow.focus();
+            return { success: false, message: 'Bu mağaza zaten açık' };
+        }
+    }
+
+    createStoreWindow(storeId);
+    return { success: true };
+});
+
+// Get list of opened store IDs
+ipcMain.handle('get-opened-stores', async () => {
+    const openedStoreIds = [];
+    storeWindows.forEach((window, storeId) => {
+        if (!window.isDestroyed()) {
+            openedStoreIds.push(storeId);
+        }
+    });
+    return openedStoreIds;
+});
+
+// Notify all windows about store updates
+ipcMain.on('notify-stores-updated', () => {
+    // Notify selector window
+    if (selectorWindow && !selectorWindow.isDestroyed()) {
+        selectorWindow.webContents.send('stores-updated');
+    }
+
+    // Notify all store windows
+    storeWindows.forEach((window) => {
+        if (!window.isDestroyed()) {
+            window.webContents.send('stores-updated');
+        }
+    });
+
+    // Notify stores management window if open
+    if (storesWindow && !storesWindow.isDestroyed()) {
+        storesWindow.webContents.send('stores-updated');
+    }
+});
+
+// Close all store windows (called when selector window is closing)
+ipcMain.on('close-all-store-windows', () => {
+    storeWindows.forEach((window, storeId) => {
+        if (!window.isDestroyed()) {
+            window.close();
+        }
+    });
+    storeWindows.clear();
+});
+
 
 
 ipcMain.handle('db-update-store-integration', async (event, { id, apiKey, apiSecret, sellerId }) => {
     return new Promise((resolve, reject) => {
         db.run('UPDATE stores SET api_key = ?, api_secret = ?, seller_id = ? WHERE id = ?', [apiKey, apiSecret, sellerId, id], function (err) {
+            if (err) reject(err)
+            else resolve({ success: true })
+        })
+    })
+})
+
+ipcMain.handle('db-update-store', async (event, { id, name }) => {
+    return new Promise((resolve, reject) => {
+        db.run('UPDATE stores SET name = ? WHERE id = ?', [name, id], function (err) {
             if (err) reject(err)
             else resolve({ success: true })
         })
@@ -664,27 +733,127 @@ ipcMain.handle('db-delete-store', async (event, storeId) => {
     })
 })
 
-function createWindow() {
-    mainWindow = new BrowserWindow({
-        width: 1400,
-        height: 900,
+// Create Store Selector Window
+function createSelectorWindow() {
+    if (selectorWindow && !selectorWindow.isDestroyed()) {
+        selectorWindow.focus();
+        return;
+    }
+
+    selectorWindow = new BrowserWindow({
+        width: 1000,
+        height: 700,
+        title: 'Mağaza Seçimi - PaketPilot',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
+        },
+        autoHideMenuBar: true,
+        backgroundColor: '#667eea'
+    });
+
+    selectorWindow.loadFile('store-selector.html');
+
+    // Handle close attempt
+    selectorWindow.on('close', (e) => {
+        if (storeWindows.size > 0) {
+            const choice = dialog.showMessageBoxSync(selectorWindow, {
+                type: 'question',
+                buttons: ['Evet', 'Hayır'],
+                title: 'Onay',
+                message: 'Mağaza seçim ekranını kapatırsanız, tüm açık mağaza pencereleri de kapanacak. Devam etmek istiyor musunuz?',
+                defaultId: 0,
+                cancelId: 1
+            });
+
+            if (choice === 1) { // Hayır (1)
+                e.preventDefault();
+            } else { // Evet (0)
+                // Force close all store windows first
+                storeWindows.forEach((win) => {
+                    if (!win.isDestroyed()) win.close();
+                });
+                storeWindows.clear();
+            }
         }
-    })
+    });
 
-    // Optional: mainWindow.webContents.openDevTools({ mode: 'detach' });
+    selectorWindow.on('closed', () => {
+        selectorWindow = null;
+        // If all store windows are also closed, quit the app
+        if (storeWindows.size === 0) {
+            app.quit();
+        }
+    });
+}
 
-    mainWindow.loadFile('index.html')
+// Focus Selector Window
+ipcMain.on('focus-selector-window', () => {
+    if (selectorWindow && !selectorWindow.isDestroyed()) {
+        if (selectorWindow.isMinimized()) selectorWindow.restore();
+        selectorWindow.focus();
+    } else {
+        // Re-create if it doesn't exist (optional, but good UX)
+        createSelectorWindow();
+    }
+});
+// Create Store-Specific Window
+function createStoreWindow(storeId) {
+    // Check if window already exists for this store
+    if (storeWindows.has(storeId)) {
+        const existingWindow = storeWindows.get(storeId);
+        if (!existingWindow.isDestroyed()) {
+            existingWindow.focus();
+            return existingWindow;
+        } else {
+            storeWindows.delete(storeId);
+        }
+    }
+
+    // Get store details
+    db.get('SELECT * FROM stores WHERE id = ?', [storeId], (err, store) => {
+        if (err || !store) {
+            console.error('Store not found:', storeId);
+            return;
+        }
+
+        const storeWindow = new BrowserWindow({
+            width: 1400,
+            height: 900,
+            title: `PaketPilot - ${store.name}`,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                additionalArguments: [`--store-id=${storeId}`]
+            },
+            autoHideMenuBar: true
+        });
+
+        storeWindow.loadFile('index.html');
+
+        // Send store ID to renderer after page loads
+        storeWindow.webContents.on('did-finish-load', () => {
+            storeWindow.webContents.send('set-store-id', storeId);
+        });
+
+        storeWindow.on('closed', () => {
+            storeWindows.delete(storeId);
+            // Notify selector window to update
+            if (selectorWindow && !selectorWindow.isDestroyed()) {
+                selectorWindow.webContents.send('stores-updated');
+            }
+        });
+
+        storeWindows.set(storeId, storeWindow);
+    });
 }
 
 app.whenReady().then(() => {
-    createWindow()
+    createSelectorWindow()
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow()
+            createSelectorWindow()
         }
     })
 })
@@ -752,6 +921,9 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
                                     'barcode': line.barcode,
                                     'quantity': line.quantity,
                                     'customer': pkg.customerFirstName + ' ' + pkg.customerLastName,
+                                    'cargoTrackingNumber': pkg.cargoTrackingNumber,
+                                    'orderDate': pkg.orderDate,
+                                    'statusDate': pkg.lastModifiedDate,
                                     'reason': line.merchantSku
                                 })
                             })
@@ -767,6 +939,9 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
                     'barcode': 'DUMMY_ARCHIVE_MATCH',
                     'quantity': 1,
                     'customer': 'Test Müşteri',
+                    'cargoTrackingNumber': '1234567890',
+                    'orderDate': Date.now() - 86400000,
+                    'statusDate': Date.now(),
                     'reason': 'Test Reason'
                 });
 
