@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Resizer Handle */
+  .resizer {
+    @apply absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 z-20;
+    user-select: none;
+    touch-action: none;
+  }
+  
+  .resizing {
+    @apply border-r-2 border-blue-400;
+  }
+
+  /* Fade Text Effect for Cells */
+  .fade-text {
+    @apply truncate;
+    display: block;
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+
+  /* Table Header Resizing Styles */
+  .resizable-th {
+    position: relative;
+  }
+}

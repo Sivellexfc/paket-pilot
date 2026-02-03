@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaketPilot - Sipariş Yönetimi</title>
+    <link href="./output.css" rel="stylesheet">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'">
+    <style>
+        .fade-text {
+            white-space: nowrap;
+            overflow: hidden;
+            mask-image: linear-gradient(to right, black 85%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+            display: block;
+        }
+
+        .resizable-th {
+            position: relative;
+        }
+
+        .resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: col-resize;
+            user-select: none;
+            background-color: transparent;
+            z-index: 20;
+        }
+
+        .resizer:hover,
+        .resizing .resizer {
+            background-color: #3b82f6;
+            /* blue-500 */
+        }
+    </style>
+</head>
+
+<body class="bg-black text-gray-900 h-screen flex overflow-hidden font-sans antialiased">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 z-10">
+        <div>
+            <!-- User Profile -->
+            <!-- Logo -->
+            <div class="p-4 mb-2 flex justify-center items-center">
+                <img src="./logo.jpeg" alt="PaketPilot Logo" class="w-48 h-auto object-contain rounded-md">
+            </div>
+
+            <!-- Navigation -->
+            <nav class="flex-1 px-3 space-y-1 overflow-y-auto" id="sidebar-store-list">
+                <!-- Dynamic Store Links will be injected here -->
+                <div class="px-3 py-4 text-xs text-gray-400 text-center">Yükleniyor...</div>
+            </nav>
+
+            <!-- Store Management Button -->
+            <div class="px-4 py-3">
+                <button id="btn-sidebar-manage-stores"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md transition-colors shadow-sm">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Mağazalar Yönetimi
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-4">
+            <span class="text-[10px] text-gray-400 font-mono">v1.0.0</span>
+        </div>
+
+    </aside>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="file-input-source" class="hidden" accept=".xlsx, .xls" />
+    <input type="file" id="file-input-target" class="hidden" accept=".xlsx, .xls" />
+    <input type="file" id="file-input-cancels" class="hidden" accept=".xlsx, .xls" />
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden bg-white relative">
+
+        <!-- PERSISTENT HEADER -->
+        <header class="bg-white border-b border-gray-200 px-6 py-4 shrink-0 flex items-center justify-between z-50">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900 tracking-tight">SİPARİŞ YÖNETİMİ</h1>
+                <span id="header-datetime" class="text-md font-light text-gray-500 tracking-tight"></span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- Dashboard Home Button -->
+                <button id="btn-nav-dashboard"
+                    class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Sipariş Yönetimi
+                </button>
+
+                <!-- File Manager Button -->
+                <button id="btn-nav-files"
+                    class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 shadow-sm transition-colors">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Dosya Yöneticisi
+                </button>
+
+                <!-- Archive Button -->
+                <button id="btn-nav-archive"
+                    class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 shadow-sm transition-colors">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Kargo Arşivi
+                </button>
+
+                <!-- Cancels Archive Button -->
+                <button id="btn-nav-cancels-archive"
+                    class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 shadow-sm transition-colors">
+                    <svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    İptaller Arşivi
+                </button>
+
+                <!-- Settings Button -->
+                <button id="btn-nav-settings"
+                    class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 shadow-sm transition-colors">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Mağaza Ayarları
+                </button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard" class="flex-1 flex flex-col w-full h-full overflow-hidden">
+            <!-- Upper Section: Two-column grid for Source and Target -->
+            <div class="flex-1 min-h-0 w-full grid grid-cols-1 lg:grid-cols-2">
+                <!--Hazırlanmayı Bekleyen Siparişler - Source Column -->
+                <div
+                    class="bg-white rounded-none shadow-sm border-r  border-b border-gray-200 flex flex-col h-full overflow-hidden">
+                    <div class="px-4 py-3 border-b border-gray-100 bg-white relative z-40">
+
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Hazırlanmayı Bekleyen
+                                Siparişler
+                            </h3>
+                        </div>
+                    </div>
+
+                    <div class="px-4 border-b border-gray-100 bg-gray-50/50 relative z-30 flex items-center gap-2 h-14">
+
+
+
+                        <!-- Auto Import Button -->
+                        <button id="trendyol-auto-import-btn"
+                            class="flex items-center gap-2 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm">
+                            <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Auto
+                        </button>
+
+                        <!-- Excel Import Button -->
+                        <button id="btn-import-source"
+                            class="flex items-center gap-2 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm">
+                            <svg class="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4" />
+                            </svg>
+                            Excel
+                        </button>
+
+                        <!-- Operations Dropdown (Source) -->
+                        <div class="relative group">
+                            <button id="source-operations-btn"
+                                class="flex items-center gap-2 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm">
+                                <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                İşlemler
+                                <svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                            <!-- Dropdown Menu -->
+                            <div id="source-operations-dropdown"
+                                class="hidden absolute left-0 mt-1 w-48 bg-white rounded-md shadow-xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+                                <div class="py-1">
+                                    <button id="source-opt-package-count"
+                                        class="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        </svg>
+                                        Adet/Paket Toplam
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hazırlamaya Başla Button -->
+                        <button id="btn-start-preparation"
+                            class="flex items-center gap-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-md transition-colors shadow-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                            Hazırlamaya Başla
+                        </button>
+
+                        <div class="flex-1"></div>
+
+                        <div class="relative group">
+                            <button id="source-columns-btn"
+                                class="flex items-center justify-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 px-2 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm"
+                                title="Columns">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                </svg>
+                            </button>
+                            <!-- Dropdown Menu -->
+                            <div id="source-column-dropdown"
+                                class="hidden absolute right-0 mt-1 w-56 bg-white rounded-none shadow-xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+                                <div class="p-2 border-b border-gray-100 bg-gray-50">
+                                    <input type="text" placeholder="Search columns..."
+                                        class="w-full px-2 py-1 text-xs border border-gray-200 rounded-none focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div id="source-column-list" class="max-h-64 overflow-y-auto p-1">
+                                    <!-- Dynamic Columns -->
+                                    <div class="px-2 py-1.5 text-xs text-gray-400 text-center">No data loaded</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table Container (Source) -->
+                    <div class="flex-1 overflow-auto min-h-0 custom-scrollbar relative z-0">
+                        <table class="min-w-full table-fixed text-left whitespace-nowrap">
+                            <thead
+                                class="bg-gray-50/90 backdrop-blur sticky top-0 z-10 border-b border-gray-100 shadow-sm">
+                                <tr id="source-header-row">
+                                    <th class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Product</th>
+                                    <th
+                                        class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                        SKU</th>
+                                    <th
+                                        class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                        Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="source-list-container" class="divide-y divide-gray-100 bg-white">
+                                <!-- No mockup data -->
+                            </tbody>
+                        </table>
+                        <!-- Empty State -->
+                        <div id="source-empty-state"
+                            class="flex flex-col items-center justify-center h-full p-8 text-center text-gray-400">
+                            <p>Veri bulunamadı.</p>
+                        </div>
+                    </div>
+                    <!-- Filter Info Banner -->
+                    <div id="source-filter-info"
+                        class="hidden bg-green-50 border-t border-green-100 px-4 py-1.5 flex justify-between items-center transition-all">
+                        <span class="text-[10px] font-medium text-green-700" id="source-filter-text">
+                            0 adet sipariş kargolandığı için listeden gizlendi.
+                        </span>
+                        <button id="btn-close-filter-info" class="text-green-500 hover:text-green-700">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kargo Durumları - Target Column -->
+                <div
+                    class="bg-white rounded-none shadow-sm border-r border-b border-gray-200 flex flex-col h-full overflow-hidden">
+
+
+                    <!-- Title Row -->
+                    <div class="px-4 py-3 border-b border-gray-100 bg-white relative z-40">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Kargo Durumları</h3>
+                    </div>
+
+                    <!-- Toolbar Controls -->
+                    <div class="px-4 border-b border-gray-100 bg-gray-50/50 relative z-30 flex items-center gap-2 h-14">
+
+                        <!-- Kargolar Kargoya Verildi Button -->
+                        <button id="btn-mark-shipped"
+                            class="flex items-center gap-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-md transition-colors shadow-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                            Kargolar Kargoya Verildi
+                        </button>
+
+                        <div class="flex-1"></div>
+
+                        <div class="relative group">
+                            <button id="target-columns-btn"
+                                class="flex items-center justify-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 px-2 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm"
+                                title="Columns">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                </svg>
+                            </button>
+                            <!-- Dropdown Menu -->
+                            <div id="target-column-dropdown"
+                                class="hidden absolute right-0 mt-1 w-56 bg-white rounded-none shadow-xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+                                <div class="p-2 border-b border-gray-100 bg-gray-50">
+                                    <input type="text" placeholder="Search columns..."
+                                        class="w-full px-2 py-1 text-xs border border-gray-200 rounded-none focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div id="target-column-list" class="max-h-64 overflow-y-auto p-1">
+                                    <!-- Dynamic Columns -->
+                                    <div class="px-2 py-1.5 text-xs text-gray-400 text-center">No data loaded</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table Container (Target) -->
+                    <div class="flex-1 overflow-auto min-h-0 custom-scrollbar relative z-0">
+                        <table class="min-w-full table-fixed text-left whitespace-nowrap">
+                            <thead
+                                class="bg-gray-50/90 backdrop-blur sticky top-0 z-10 border-b border-gray-100 shadow-sm">
+                                <tr id="target-header-row">
+                                    <th class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Product</th>
+                                    <th
+                                        class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                        SKU</th>
+                                    <th
+                                        class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                        Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="target-list-container" class="divide-y divide-gray-100 bg-white">
+                                <!-- No mockup data -->
+                            </tbody>
+                        </table>
+                        <!-- Empty State -->
+                        <div id="target-empty-state"
+                            class="flex flex-col items-center justify-center h-full p-8 text-center text-gray-400">
+                            <p>Veri bulunamadı.</p>
+                        </div>
+                    </div>
+
+
+
+                </div>
+            </div>
+
+            <!-- ANLIK TAKİP Section (Full Width at Bottom) -->
+            <div class="w-full h-2/5 border-t border-gray-200 bg-white flex flex-col">
+                <!-- Title -->
+                <div class="px-4 py-3 border-b border-gray-100 bg-white">
+                    <h3 class="text-xs font-bold text-red-600 uppercase tracking-wider">Anlık Takip</h3>
+                </div>
+
+                <!-- Toolbar Controls -->
+                <div
+                    class="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-2 relative z-30">
+
+
+                    <div class="flex-1"></div>
+
+                    <!-- Columns Dropdown -->
+                    <div class="relative group">
+                        <button id="cancels-columns-btn"
+                            class="flex items-center justify-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 px-2 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm"
+                            title="Columns">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                            </svg>
+                        </button>
+                        <!-- Dropdown Menu -->
+                        <div id="cancels-column-dropdown"
+                            class="hidden absolute right-0 mt-1 w-56 bg-white rounded-none shadow-xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+                            <div class="p-2 border-b border-gray-100 bg-gray-50">
+                                <input type="text" placeholder="Search columns..."
+                                    class="w-full px-2 py-1 text-xs border border-gray-200 rounded-none focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div id="cancels-column-list" class="max-h-64 overflow-y-auto p-1">
+                                <!-- Dynamic Columns -->
+                                <div class="px-2 py-1.5 text-xs text-gray-400 text-center">No data loaded</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Container (Cancels) -->
+                <div class="flex-1 overflow-auto min-h-0 custom-scrollbar relative z-0">
+                    <table class="min-w-full table-fixed text-left whitespace-nowrap">
+                        <thead class="bg-gray-50/90 backdrop-blur sticky top-0 z-10 border-b border-gray-100 shadow-sm">
+                            <tr id="cancels-header-row">
+                                <th class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Product</th>
+                                <th
+                                    class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                    SKU</th>
+                                <th
+                                    class="px-2 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                                    Price</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cancels-list-container" class="divide-y divide-gray-100 bg-white">
+                            <!-- No mockup data -->
+                        </tbody>
+                    </table>
+                    <!-- Empty State -->
+                    <div id="cancels-empty-state"
+                        class="flex flex-col items-center justify-center h-full p-8 text-center text-gray-400">
+                        <p>Veri bulunamadı.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="view-settings" class="hidden flex-1 flex flex-col w-full h-full">
+            <div class="h-full flex flex-col">
+                <div class="bg-white rounded-none shadow-sm border-gray-200 flex flex-col h-full overflow-hidden">
+                    <!-- Store Toolbar -->
+                    <div
+                        class="px-4 py-3 border-b border-gray-100 bg-white relative z-40 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Seçili Mağaza:</span>
+                            <span id="settings-header-store-name" class="text-sm font-medium text-gray-900">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Integration Settings Section -->
+                    <div id="settings-integration-section" class="px-4 py-4 border-b border-gray-200 bg-gray-50 hidden">
+                        <div class="max-w-xl">
+                            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mr-2 my-4">Entegrasyon
+                                Ayarları</div>
+
+                            <!-- Seller ID -->
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1 tracking-wider">Satıcı
+                                    ID</label>
+                                <input type="text" id="input-seller-id" placeholder="Satıcı ID giriniz..."
+                                    class="block px-2 py-2 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            </div>
+
+                            <!-- API Key -->
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1 tracking-wider">Trendyol API
+                                    Key</label>
+                                <div class="relative">
+                                    <input type="password" id="input-api-key" placeholder="API Key..."
+                                        class="block px-2 py-2 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10">
+                                </div>
+                            </div>
+
+                            <!-- API Secret -->
+                            <div class="mb-4">
+                                <label class="block text-xs font-medium text-gray-500 mb-1 tracking-wider">Trendyol API
+                                    Secret</label>
+                                <div class="relative">
+                                    <input type="password" id="input-api-secret" placeholder="API Secret..."
+                                        class="block px-2 py-2 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10">
+                                </div>
+                            </div>
+
+                            <!-- Save Button -->
+                            <div class="flex justify-end">
+                                <button id="btn-save-integration"
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                                    Kaydet
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- FILE MANAGER VIEW -->
+        <div id="view-file-manager" class="hidden flex-1 flex flex-col w-full h-full overflow-hidden">
+            <div class="h-full flex flex-col">
+                <div class="bg-white rounded-none shadow-sm border-gray-200 flex flex-col h-full overflow-hidden">
+                    <!-- File Manager Header -->
+                    <div class="px-4 py-3 border-b border-gray-100 bg-white relative z-40">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Kaydedilmiş Dosyalar</h3>
+                    </div>
+
+                    <!-- File List -->
+                    <div class="flex-1 overflow-y-auto w-full relative">
+                        <table class="min-w-full w-full border-collapse">
+                            <thead class="sticky top-0 z-10 bg-gray-50">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        Dosya Adı
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        Tür
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        Tarih
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        İşlem
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="file-manager-page-list" class="bg-white divide-y divide-gray-200">
+                                <!-- Dynamic content will be inserted here -->
+                                <tr>
+                                    <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">Yükleniyor...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ARCHIVE VIEW -->
+        <div id="view-archive" class="hidden flex-1 flex flex-col w-full h-full overflow-hidden">
+            <div class="h-full flex flex-col">
+                <div class="bg-white rounded-none shadow-sm border-gray-200 flex flex-col h-full overflow-hidden">
+                    <!-- Archive Header & Filters -->
+                    <div class="px-4 py-3 border-b border-gray-100 bg-white relative z-40">
+                        <div class="flex items-center justify-between gap-4">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Kargo Arşivi</h3>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs font-medium text-gray-500">Zaman Aralığı:</label>
+                                    <select id="archive-range-filter"
+                                        class="text-sm border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="last_week" selected>Son 1 Hafta</option>
+                                        <option value="last_2_weeks">Son 2 Hafta</option>
+                                        <option value="last_month">Son 1 Ay</option>
+                                        <option value="today">Bugün</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2" id="archive-date-picker-container"
+                                    style="display: none;">
+                                    <input type="date" id="archive-date-filter" class="hidden">
+                                </div>
+                                <div class="hidden">
+                                    <!-- Hidden Type Filter for JS compatibility -->
+                                    <select id="archive-type-filter" class="hidden">
+                                        <option value="cargo" selected>Kargo</option>
+                                    </select>
+                                </div>
+                                <button id="btn-refresh-archive"
+                                    class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Yenile
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Archive List -->
+                    <div class="flex-1 overflow-auto w-full relative">
+                        <table class="min-w-full divide-y divide-gray-200 table-fixed" style="table-layout: fixed;">
+                            <thead class="sticky top-0 z-10 bg-gray-50">
+                                <tr>
+                                    <!-- Columns Removed: Tarih, Tür -->
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-40">
+                                        Veri
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-auto">
+                                        Detaylar
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-24">
+                                        İşlem
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="archive-list-container" class="bg-white divide-y divide-gray-200">
+                                <!-- Dynamic content will be inserted here -->
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Tarih seçiniz ve
+                                        Yenile'ye tıklayınız.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CANCELS ARCHIVE VIEW -->
+        <div id="view-cancels-archive" class="hidden flex-1 flex flex-col w-full h-full overflow-hidden">
+            <div class="h-full flex flex-col">
+                <div class="bg-white rounded-none shadow-sm border-gray-200 flex flex-col h-full overflow-hidden">
+                    <!-- Cancels Archive Header & Filters -->
+                    <div class="px-4 py-3 border-b border-gray-100 bg-white relative z-40">
+                        <div class="flex items-center justify-between gap-4">
+                            <h3 class="text-xs font-bold text-red-600 uppercase tracking-wider">İptaller Arşivi</h3>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs font-medium text-gray-500">Aralık:</label>
+                                    <select id="cancels-range-filter"
+                                        class="text-sm border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="today">Bugün</option>
+                                        <option value="last_3_days">Son 3 Gün</option>
+                                        <option value="last_week">Son 1 Hafta</option>
+                                        <option value="last_month">Son 1 Ay</option>
+                                    </select>
+                                </div>
+                                <button id="btn-fetch-trendyol-cancels"
+                                    class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors shadow-sm">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    Trendyol Getir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cancels Archive List -->
+                    <div class="flex-1 overflow-auto w-full relative">
+                        <table class="min-w-full w-full border-collapse table-fixed">
+                            <thead class="sticky top-0 z-10 bg-gray-50">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-48">
+                                        Tarih
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-48">
+                                        İptal Aşaması
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-40">
+                                        Sipariş No
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-auto">
+                                        Detaylar
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-24">
+                                        İşlem
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="cancels-archive-list-container" class="bg-white divide-y divide-gray-200">
+                                <!-- Dynamic content will be inserted here -->
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Tarih seçiniz ve
+                                        Yenile'ye tıklayınız.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="view-no-store"
+            class="hidden flex-1 flex flex-col items-center justify-center w-full h-full bg-gray-50 text-center z-50">
+            <div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-md">
+                <div class="rounded-full bg-blue-100 p-4 w-16 h-16 mx-auto flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-gray-900 mb-2">Mağaza Bulunamadı</h2>
+                <p class="text-sm text-gray-500 mb-6">Uygulamayı kullanmak için lütfen önce bir mağaza ekleyiniz.</p>
+                <button id="btn-no-store-add"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Mağaza Ekle
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Manual Entry Modal -->
+    <div id="manual-entry-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title"
+        role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Background overlay -->
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
+                id="modal-backdrop"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                Manuel Ürün Ekle
+                            </h3>
+                            <div class="mt-2 text-sm text-gray-500">
+                                Target listesine manuel olarak ürün ekleyin. Ürün ismi listeden
+                                seçilmelidir.
+                            </div>
+
+                            <!-- Form -->
+                            <div class="mt-4 space-y-4">
+                                <!-- Product Name Input with Autocomplete -->
+                                <div class="relative">
+                                    <label for="manual-product-name"
+                                        class="block text-sm font-medium text-gray-700">Ürün Adı</label>
+                                    <input type="text" id="manual-product-name" autocomplete="off"
+                                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        placeholder="Ürün aramaya başlayın...">
+                                    <!-- Autocomplete List -->
+                                    <div id="manual-product-suggestions"
+                                        class="hidden absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                        <!-- Suggestions here -->
+                                    </div>
+                                </div>
+
+                                <!-- Auto-Filled Barcode -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Barkod
+                                        (Otomatik)</label>
+                                    <div id="manual-barcode-display"
+                                        class="mt-1 w-full bg-gray-100 border border-gray-200 rounded-md py-2 px-3 text-gray-500 sm:text-sm min-h-[38px]">
+                                        -
+                                    </div>
+                                </div>
+
+                                <!-- Package Count -->
+                                <div>
+                                    <label for="manual-package-count"
+                                        class="block text-sm font-medium text-gray-700">Adet
+                                        Sayısı</label>
+                                    <input type="number" id="manual-package-count" min="1" value="1"
+                                        class="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="manual-add-confirm-btn"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Ekle
+                    </button>
+                    <button type="button" id="manual-cancel-btn"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Store Modal -->
+    <div id="add-store-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title"
+        role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true">
+            </div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                Yeni Mağaza Ekle
+                            </h3>
+                            <div class="mt-4">
+                                <label for="new-store-name" class="block text-sm font-medium text-gray-700">Mağaza
+                                    Adı</label>
+                                <input type="text" id="new-store-name"
+                                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    placeholder="Mağaza adını giriniz...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="btn-confirm-add-store"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Ekle
+                    </button>
+                    <button type="button" id="btn-cancel-add-store"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal"
+        class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                    <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="modal-title">Onay</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500" id="modal-message">Bu işlemi yapmak istediğinize emin misiniz?</p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="btn-modal-confirm"
+                        class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md w-1/2 shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300">
+                        Sil
+                    </button>
+                    <button id="btn-modal-cancel"
+                        class="mt-3 px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md w-1/2 shadow-sm border border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Link Renderer Script -->
+    <script src="./renderer.js"></script>
+
+</body>
+
+</html>
