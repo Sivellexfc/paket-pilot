@@ -168,11 +168,6 @@ function performMigrations() {
                     else console.log("Added store_type to stores");
                 });
             }
-
-            // USER REQUEST: Update all existing stores to 'trendyol'
-            db.run("UPDATE stores SET store_type = 'trendyol'", (err) => {
-                if (!err) console.log("All stores updated to Trendyol type");
-            });
         }
     });
 }
