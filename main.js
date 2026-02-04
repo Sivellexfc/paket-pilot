@@ -48,6 +48,7 @@ function initializeTables() {
         db.run(`CREATE TABLE IF NOT EXISTS stores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
+      store_type TEXT DEFAULT 'website',
       api_key TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`)
@@ -79,6 +80,18 @@ function initializeTables() {
       order_data TEXT, -- JSON string with full order details
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(store_id) REFERENCES stores(id) ON DELETE CASCADE
+    )`)
+
+        // Other Stores Cargo Info Table (Manual Entry)
+        db.run(`CREATE TABLE IF NOT EXISTS other_stores_cargo_info (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER NOT NULL,
+      product_name TEXT,
+      package_count INTEGER,
+      quantity INTEGER,
+      barcode TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(store_id) REFERENCES stores(id) ON DELETE CASCADE
     )`)
 
@@ -147,6 +160,19 @@ function performMigrations() {
                     else console.log("Added created_at to stores");
                 });
             }
+
+            const hasStoreType = rows.some(r => r.name === 'store_type');
+            if (!hasStoreType) {
+                db.run("ALTER TABLE stores ADD COLUMN store_type TEXT DEFAULT 'website'", (err) => {
+                    if (err) console.error("Migration error (stores store_type):", err.message);
+                    else console.log("Added store_type to stores");
+                });
+            }
+
+            // USER REQUEST: Update all existing stores to 'trendyol'
+            db.run("UPDATE stores SET store_type = 'trendyol'", (err) => {
+                if (!err) console.log("All stores updated to Trendyol type");
+            });
         }
     });
 }
@@ -323,9 +349,9 @@ ipcMain.handle('load-batch-data', async (event, batchId) => {
 })
 
 // Store & Product IPC Handlers
-ipcMain.handle('db-add-store', async (event, name) => {
+ipcMain.handle('db-add-store', async (event, { name, type }) => {
     return new Promise((resolve, reject) => {
-        db.run('INSERT INTO stores (name) VALUES (?)', [name], function (err) {
+        db.run('INSERT INTO stores (name, store_type) VALUES (?, ?)', [name, type], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE constraint failed')) {
                     resolve({ success: false, message: 'Store already exists' })
@@ -474,6 +500,33 @@ ipcMain.handle('db-get-store', async (event, id) => {
             else resolve(row)
         })
     })
+})
+
+ipcMain.handle('db-save-manual-cargo-entry', async (event, { storeId, entries }) => {
+    return new Promise((resolve, reject) => {
+        if (!storeId || !entries || !Array.isArray(entries)) {
+            return reject(new Error('Invalid inputs'));
+        }
+
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+            const stmt = db.prepare("INSERT INTO other_stores_cargo_info (store_id, product_name, package_count, quantity, barcode) VALUES (?, ?, ?, ?, ?)");
+
+            try {
+                for (const entry of entries) {
+                    stmt.run(storeId, entry.productName, entry.packageCount, entry.quantity, entry.barcode);
+                }
+                stmt.finalize();
+                db.run("COMMIT", (err) => {
+                    if (err) reject(err);
+                    else resolve({ success: true, count: entries.length });
+                });
+            } catch (err) {
+                db.run("ROLLBACK");
+                reject(err);
+            }
+        });
+    });
 })
 
 ipcMain.handle("db-delete-batch", async (event, batchId) => {

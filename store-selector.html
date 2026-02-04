@@ -93,15 +93,88 @@
                     <!-- Add New Store Section -->
                     <div class="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
                         <h4 class="text-sm font-semibold text-orange-800 mb-3">Yeni Mağaza Ekle</h4>
-                        <div class="flex gap-2">
+
+                        <!-- Name Input -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-medium text-orange-700 mb-1">Mağaza Adı</label>
                             <input type="text" id="new-store-name"
-                                class="flex-1 shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border"
-                                placeholder="Mağaza Adı">
-                            <button id="btn-add-new-store"
-                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
-                                Ekle
-                            </button>
+                                class="shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border"
+                                placeholder="Örn: Trendyol Mağazam">
                         </div>
+
+                        <!-- Type Selection -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-medium text-orange-700 mb-2">Platform Seçimi</label>
+                            <div class="grid grid-cols-3 gap-2" id="store-type-grid">
+                                <!-- Trendyol -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="trendyol" class="peer sr-only" checked>
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <img src="./icons/trendyol.png" alt="Trendyol"
+                                            class="w-8 h-8 object-contain mb-1">
+                                        <span class="text-[10px] font-medium text-gray-600">Trendyol</span>
+                                    </div>
+                                </label>
+                                <!-- Hepsiburada -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="hepsiburada" class="peer sr-only">
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <img src="./icons/hepsiburada.png" alt="Hepsiburada"
+                                            class="w-8 h-8 object-contain mb-1">
+                                        <span class="text-[10px] font-medium text-gray-600">Hepsiburada</span>
+                                    </div>
+                                </label>
+                                <!-- N11 -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="n11" class="peer sr-only">
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <div
+                                            class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded text-xs font-bold text-red-600 mb-1">
+                                            N11</div>
+                                        <span class="text-[10px] font-medium text-gray-600">N11</span>
+                                    </div>
+                                </label>
+                                <!-- Amazon -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="amazon" class="peer sr-only">
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <img src="./icons/amazon.png" alt="Amazon" class="w-8 h-8 object-contain mb-1">
+                                        <span class="text-[10px] font-medium text-gray-600">Amazon</span>
+                                    </div>
+                                </label>
+                                <!-- Idefix -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="idefix" class="peer sr-only">
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <img src="./icons/idefix.png" alt="Idefix" class="w-8 h-8 object-contain mb-1">
+                                        <span class="text-[10px] font-medium text-gray-600">Idefix</span>
+                                    </div>
+                                </label>
+                                <!-- Website -->
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="store_type" value="website" class="peer sr-only">
+                                    <div
+                                        class="flex flex-col items-center justify-center p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:ring-1 peer-checked:ring-orange-500 transition-all">
+                                        <svg class="w-8 h-8 text-gray-500 mb-1" fill="none" viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                                        </svg>
+                                        <span class="text-[10px] font-medium text-gray-600">Website</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button id="btn-add-new-store"
+                            class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                            Mağaza Oluştur
+                        </button>
                     </div>
 
                     <!-- Store List -->

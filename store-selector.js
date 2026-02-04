@@ -16,13 +16,18 @@ const manageStoreList = document.getElementById('manage-store-list');
 let stores = [];
 
 // Trendyol Logo SVG path
-const TRENDYOL_LOGO_SVG = `
-<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8">
-    <circle cx="12" cy="12" r="12" fill="#F27A1A"/>
-    <path d="M12 4C14.5 4 16.5 5.5 16.5 8C16.5 10.5 12 19 12 19C12 19 7.5 10.5 7.5 8C7.5 5.5 9.5 4 12 4Z" fill="white"/>
-    <circle cx="12" cy="8" r="2" fill="#F27A1A"/>
-</svg>
-`;
+// Helper to get icon by type
+function getStoreIcon(type) {
+    const t = (type || 'website').toLowerCase();
+    switch (t) {
+        case 'trendyol': return `<img src="./icons/trendyol.png" class="w-8 h-8 object-contain">`;
+        case 'hepsiburada': return `<img src="./icons/hepsiburada.png" class="w-8 h-8 object-contain">`;
+        case 'amazon': return `<img src="./icons/amazon.png" class="w-8 h-8 object-contain">`;
+        case 'idefix': return `<img src="./icons/idefix.png" class="w-8 h-8 object-contain">`;
+        case 'n11': return `<div class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded text-xs font-bold text-red-600">N11</div>`;
+        default: return `<svg class="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>`;
+    }
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -93,8 +98,8 @@ async function renderStores() {
         card.innerHTML = `
             <div class="flex items-center gap-4">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden">
-                        ${TRENDYOL_LOGO_SVG}
+                    <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden border border-gray-100 bg-white">
+                        ${getStoreIcon(store.store_type)}
                     </div>
                 </div>
                 <div>
@@ -225,13 +230,16 @@ function renderManagementList() {
 
 async function addNewStore() {
     const name = inputNewStoreName.value.trim();
+    const typeFn = document.querySelector('input[name="store_type"]:checked');
+    const type = typeFn ? typeFn.value : 'website';
+
     if (!name) {
         alert('Lütfen mağaza adı giriniz.');
         return;
     }
 
     try {
-        const res = await ipcRenderer.invoke('db-add-store', name);
+        const res = await ipcRenderer.invoke('db-add-store', { name, type });
         if (res.success) {
             inputNewStoreName.value = '';
             await loadStores(); // Refresh global list
