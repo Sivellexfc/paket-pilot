@@ -15,6 +15,140 @@ const manageStoreList = document.getElementById('manage-store-list');
 
 let stores = [];
 
+// ==========================================
+// CUSTOM ALERT MODAL FUNCTION
+// ==========================================
+function showAlert(message, type = 'info', title = null) {
+    const modal = document.getElementById('alert-modal');
+    const titleEl = document.getElementById('alert-title');
+    const messageEl = document.getElementById('alert-message');
+    const iconContainer = document.getElementById('alert-icon-container');
+    const okBtn = document.getElementById('btn-alert-ok');
+
+    if (!modal || !titleEl || !messageEl || !iconContainer || !okBtn) {
+        alert(message);
+        return;
+    }
+
+    messageEl.textContent = message;
+
+    const configs = {
+        success: {
+            title: 'Başarılı',
+            bgColor: 'bg-green-100',
+            iconColor: 'text-green-600',
+            btnColor: 'bg-green-600 hover:bg-green-700 focus:ring-green-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>`
+        },
+        error: {
+            title: 'Hata',
+            bgColor: 'bg-red-100',
+            iconColor: 'text-red-600',
+            btnColor: 'bg-red-600 hover:bg-red-700 focus:ring-red-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>`
+        },
+        warning: {
+            title: 'Uyarı',
+            bgColor: 'bg-yellow-100',
+            iconColor: 'text-yellow-600',
+            btnColor: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>`
+        },
+        info: {
+            title: 'Bildirim',
+            bgColor: 'bg-blue-100',
+            iconColor: 'text-blue-600',
+            btnColor: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>`
+        }
+    };
+
+    const config = configs[type] || configs.info;
+    titleEl.textContent = title || config.title;
+    iconContainer.className = `mx-auto flex items-center justify-center h-12 w-12 rounded-full ${config.bgColor}`;
+    iconContainer.innerHTML = `<div class="${config.iconColor}">${config.icon}</div>`;
+    okBtn.className = `px-4 py-2 text-white text-sm font-medium rounded-md w-full shadow-sm focus:outline-none focus:ring-2 ${config.btnColor}`;
+
+    modal.classList.remove('hidden');
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        okBtn.removeEventListener('click', closeModal);
+        modal.removeEventListener('click', outsideClickHandler);
+    };
+
+    const outsideClickHandler = (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    };
+
+    okBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', outsideClickHandler);
+}
+
+// ==========================================
+// CUSTOM CONFIRM MODAL FUNCTION
+// ==========================================
+function showConfirm(title, message, onConfirm, onCancel = null, confirmText = 'Evet', cancelText = 'İptal') {
+    const modal = document.getElementById('confirmation-modal');
+    const titleEl = document.getElementById('modal-title');
+    const messageEl = document.getElementById('modal-message');
+    const confirmBtn = document.getElementById('btn-modal-confirm');
+    const cancelBtn = document.getElementById('btn-modal-cancel');
+
+    if (!modal || !titleEl || !messageEl || !confirmBtn || !cancelBtn) {
+        if (confirm(message)) {
+            if (onConfirm) onConfirm();
+        } else {
+            if (onCancel) onCancel();
+        }
+        return;
+    }
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+
+    modal.classList.remove('hidden');
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        confirmBtn.removeEventListener('click', confirmHandler);
+        cancelBtn.removeEventListener('click', cancelHandler);
+        modal.removeEventListener('click', outsideClickHandler);
+    };
+
+    const confirmHandler = () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+    };
+
+    const cancelHandler = () => {
+        closeModal();
+        if (onCancel) onCancel();
+    };
+
+    const outsideClickHandler = (e) => {
+        if (e.target === modal) {
+            cancelHandler();
+        }
+    };
+
+    confirmBtn.addEventListener('click', confirmHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
+    modal.addEventListener('click', outsideClickHandler);
+}
+
 // Trendyol Logo SVG path
 // Helper to get icon by type
 function getStoreIcon(type) {
@@ -48,6 +182,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for store updates from other windows
     ipcRenderer.on('stores-updated', () => {
         loadStores();
+    });
+
+    // Listen for close confirmation request from main process
+    ipcRenderer.on('request-close-confirmation', (event, data) => {
+        showConfirm(
+            'Uygulamayı Kapat',
+            data.message,
+            () => {
+                // User confirmed - send response to main
+                ipcRenderer.send('close-confirmation-response', true);
+            },
+            () => {
+                // User cancelled - send response to main
+                ipcRenderer.send('close-confirmation-response', false);
+            },
+            'Kapat',
+            'İptal'
+        );
     });
 });
 
@@ -234,7 +386,7 @@ async function addNewStore() {
     const type = typeFn ? typeFn.value : 'website';
 
     if (!name) {
-        alert('Lütfen mağaza adı giriniz.');
+        showAlert('Lütfen mağaza adı giriniz.', 'warning');
         return;
     }
 
@@ -245,12 +397,15 @@ async function addNewStore() {
             await loadStores(); // Refresh global list
             renderManagementList(); // Refresh modal list
             ipcRenderer.send('notify-stores-updated');
+            // FIX: Restore focus to avoid freeze sensation
+            setTimeout(() => inputNewStoreName.focus(), 100);
         } else {
-            alert('Ekleme başarısız: ' + (res.message || ''));
+            showAlert('Ekleme başarısız: ' + (res.message || ''), 'error');
+            setTimeout(() => inputNewStoreName.focus(), 100);
         }
     } catch (err) {
         console.error('Error adding store:', err);
-        alert('Bir hata oluştu: ' + err.message);
+        showAlert('Bir hata oluştu: ' + err.message, 'error');
     }
 }
 
@@ -264,7 +419,7 @@ async function updateStoreName(id, newName) {
             renderManagementList();
             ipcRenderer.send('notify-stores-updated');
         } else {
-            alert('Güncelleme başarısız: ' + res.message);
+            showAlert('Güncelleme başarısız: ' + res.message, 'error');
         }
     } catch (err) {
         console.error(err);
@@ -272,21 +427,28 @@ async function updateStoreName(id, newName) {
 }
 
 async function deleteStore(id, name) {
-    if (confirm(`${name} mağazasını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
-        try {
-            const res = await ipcRenderer.invoke('db-delete-store', id);
-            if (res.success) {
-                await loadStores();
-                renderManagementList();
-                ipcRenderer.send('notify-stores-updated');
-            } else {
-                alert('Silme başarısız: ' + res.message);
+    showConfirm(
+        'Mağaza Sil',
+        `${name} mağazasını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`,
+        async () => {
+            try {
+                const res = await ipcRenderer.invoke('db-delete-store', id);
+                if (res.success) {
+                    await loadStores();
+                    renderManagementList();
+                    ipcRenderer.send('notify-stores-updated');
+                } else {
+                    showAlert('Silme başarısız: ' + res.message, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showAlert('Bir hata oluştu.', 'error');
             }
-        } catch (err) {
-            console.error(err);
-            alert('Bir hata oluştu.');
-        }
-    }
+        },
+        null,
+        'Sil',
+        'İptal'
+    );
 }
 
 async function openStoreWindow(store) {
@@ -304,6 +466,6 @@ async function openStoreWindow(store) {
         }
     } catch (err) {
         console.error('Error opening store window:', err);
-        alert('Bir hata oluştu: ' + err.message);
+        showAlert('Bir hata oluştu: ' + err.message, 'error');
     }
 }

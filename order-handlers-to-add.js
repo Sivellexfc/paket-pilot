@@ -5,7 +5,7 @@
 ipcMain.handle('orders-sync-from-api', async (event, { storeId, orders }) => {
     return new Promise((resolve, reject) => {
         if (!storeId || !orders || !Array.isArray(orders)) {
-            resolve({ success: false, message: 'Invalid parameters' })
+            resolve({ success: false, message: 'Geçersiz parametreler' })
             return
         }
 
@@ -74,7 +74,7 @@ ipcMain.handle('orders-get-by-status', async (event, { storeId, status }) => {
 ipcMain.handle('orders-update-status', async (event, { orderIds, status, cancelStage }) => {
     return new Promise((resolve, reject) => {
         if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-            resolve({ success: false, message: 'No order IDs provided' })
+            resolve({ success: false, message: 'Geçersiz sipariş ID' })
             return
         }
 
@@ -101,7 +101,7 @@ ipcMain.handle('orders-update-status', async (event, { orderIds, status, cancelS
 ipcMain.handle('orders-mark-returned', async (event, { orderIds }) => {
     return new Promise((resolve, reject) => {
         if (!orderIds || !Array.isArray(orderIds)) {
-            resolve({ success: false, message: 'Invalid order IDs' })
+            resolve({ success: false, message: 'Geçersiz sipariş ID' })
             return
         }
 

@@ -15,6 +15,13 @@ require('electron-reload')(__dirname, {
     electron: path.join(__dirname, 'node_modules', '.bin', 'electron')
 });
 
+// Disable native error dialogs
+app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling,MediaSessionService');
+process.on('uncaughtException', (error) => {
+    log.error('Uncaught Exception:', error);
+    // Don't show native dialog, just log it
+});
+
 // Database Setup
 const dbPath = path.join(app.getPath('userData'), 'stok-takip.db')
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -176,18 +183,18 @@ function performMigrations() {
 ipcMain.handle('fetch-trendyol-orders', async (event, storeId) => {
     return new Promise(async (resolve, reject) => {
         if (!storeId) {
-            resolve({ success: false, message: 'Store ID required' })
+            resolve({ success: false, message: 'Store ID gereklidir.' })
             return
         }
 
         // Get Credentials
         db.get('SELECT api_key, api_secret, seller_id FROM stores WHERE id = ?', [storeId], async (err, row) => {
             if (err) {
-                resolve({ success: false, message: 'Database error: ' + err.message })
+                resolve({ success: false, message: 'Veritabanı hatası: ' + err.message })
                 return
             }
             if (!row || !row.seller_id || (!row.api_key && !row.api_secret)) {
-                resolve({ success: false, message: 'API Credentials missing for this store.' })
+                resolve({ success: false, message: 'API Entegrasyonları mevcut mağaza için eksik.' })
                 return
             }
 
@@ -225,7 +232,7 @@ ipcMain.handle('fetch-trendyol-orders', async (event, storeId) => {
                 log.info('API Status Code:', response.status, response.statusText);
                 if (!response.ok) {
                     const errorText = await response.text()
-                    resolve({ success: false, message: `API Error: ${response.status} - ${errorText}` })
+                    resolve({ success: false, message: `API Hatası: ${response.status} - ${errorText}` })
                     return
                 }
 
@@ -262,7 +269,7 @@ ipcMain.handle('fetch-trendyol-orders', async (event, storeId) => {
                 resolve({ success: true, data: mappedRows })
 
             } catch (error) {
-                resolve({ success: false, message: 'Request Failed: ' + error.message })
+                resolve({ success: false, message: 'İstek Başarısız: ' + error.message })
             }
         })
     })
@@ -271,12 +278,12 @@ ipcMain.handle('fetch-trendyol-orders', async (event, storeId) => {
 ipcMain.handle('save-excel-data', async (event, { storeId, side, data, filename }) => {
     return new Promise((resolve, reject) => {
         if (!data || !Array.isArray(data) || data.length === 0) {
-            resolve({ success: false, message: 'No data to save' })
+            resolve({ success: false, message: 'Kaydedilecek veri yok.' })
             return
         }
 
         if (!storeId) {
-            resolve({ success: false, message: 'Store ID required' })
+            resolve({ success: false, message: 'Store ID gereklidir.' })
             return
         }
 
@@ -349,7 +356,7 @@ ipcMain.handle('db-add-store', async (event, { name, type }) => {
         db.run('INSERT INTO stores (name, store_type) VALUES (?, ?)', [name, type], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE constraint failed')) {
-                    resolve({ success: false, message: 'Store already exists' })
+                    resolve({ success: false, message: 'Bu mağaza zaten mevcut.' })
                 } else {
                     reject(err)
                 }
@@ -411,7 +418,7 @@ ipcMain.handle('open-stores-window', () => {
 // Open a store-specific window
 ipcMain.handle('open-store-window', async (event, storeId) => {
     if (!storeId) {
-        return { success: false, message: 'Store ID is required' };
+        return { success: false, message: 'Store ID gereklidir.' };
     }
 
     // Check if already open
@@ -503,22 +510,23 @@ ipcMain.handle('db-save-manual-cargo-entry', async (event, { storeId, entries })
             return reject(new Error('Invalid inputs'));
         }
 
-        db.serialize(() => {
-            db.run("BEGIN TRANSACTION");
-            const stmt = db.prepare("INSERT INTO other_stores_cargo_info (store_id, product_name, package_count, quantity, barcode) VALUES (?, ?, ?, ?, ?)");
+        if (entries.length === 0) return resolve({ success: true, count: 0 });
 
-            try {
-                for (const entry of entries) {
-                    stmt.run(storeId, entry.productName, entry.packageCount, entry.quantity, entry.barcode);
-                }
-                stmt.finalize();
-                db.run("COMMIT", (err) => {
-                    if (err) reject(err);
-                    else resolve({ success: true, count: entries.length });
-                });
-            } catch (err) {
-                db.run("ROLLBACK");
+        // Bulk Insert için query oluşturma
+        const placeholders = entries.map(() => '(?, ?, ?, ?, ?)').join(',');
+        const values = [];
+        entries.forEach(e => {
+            values.push(storeId, e.productName, e.packageCount, e.quantity, e.barcode);
+        });
+
+        const query = `INSERT INTO other_stores_cargo_info (store_id, product_name, package_count, quantity, barcode) VALUES ${placeholders}`;
+
+        db.run(query, values, function (err) {
+            if (err) {
+                console.error("Manual Cargo Insert Error:", err);
                 reject(err);
+            } else {
+                resolve({ success: true, count: entries.length });
             }
         });
     });
@@ -700,7 +708,7 @@ ipcMain.handle('param-remove-order-from-entry', async (event, { entryId, orderNo
                 return;
             }
             if (!row) {
-                resolve({ success: false, message: 'Entry not found' });
+                resolve({ success: false, message: 'Kayıt bulunamadı.' });
                 return;
             }
 
@@ -708,7 +716,7 @@ ipcMain.handle('param-remove-order-from-entry', async (event, { entryId, orderNo
             try {
                 data = JSON.parse(row.data);
             } catch (e) {
-                resolve({ success: false, message: 'Invalid data format' });
+                resolve({ success: false, message: 'Geçersiz veri formatı' });
                 return;
             }
 
@@ -730,7 +738,7 @@ ipcMain.handle('param-remove-order-from-entry', async (event, { entryId, orderNo
             ));
 
             if (orderIdx === -1) {
-                resolve({ success: false, message: 'Order number column not found in entry' });
+                resolve({ success: false, message: 'Sipariş numarası sütunu bulunamadı.' });
                 return;
             }
 
@@ -805,24 +813,12 @@ function createSelectorWindow() {
     // Handle close attempt
     selectorWindow.on('close', (e) => {
         if (storeWindows.size > 0) {
-            const choice = dialog.showMessageBoxSync(selectorWindow, {
-                type: 'question',
-                buttons: ['Evet', 'Hayır'],
-                title: 'Onay',
-                message: 'Mağaza seçim ekranını kapatırsanız, tüm açık mağaza pencereleri de kapanacak. Devam etmek istiyor musunuz?',
-                defaultId: 0,
-                cancelId: 1
-            });
+            e.preventDefault(); // Prevent immediate close
 
-            if (choice === 1) { // Hayır (1)
-                e.preventDefault();
-            } else { // Evet (0)
-                // Force close all store windows first
-                storeWindows.forEach((win) => {
-                    if (!win.isDestroyed()) win.close();
-                });
-                storeWindows.clear();
-            }
+            // Send request to renderer to show confirmation modal
+            selectorWindow.webContents.send('request-close-confirmation', {
+                message: 'Mağaza seçim ekranını kapatırsanız, tüm açık mağaza pencereleri de kapanacak. Devam etmek istiyor musunuz?'
+            });
         }
     });
 
@@ -896,6 +892,21 @@ function createStoreWindow(storeId) {
     });
 }
 
+ipcMain.handle('db-get-manual-cargo-entries', async (event, { storeId, startDate, endDate }) => {
+    return new Promise((resolve, reject) => {
+        const query = `
+            SELECT * FROM other_stores_cargo_info 
+            WHERE store_id = ? 
+            AND date(created_at) BETWEEN date(?) AND date(?)
+            ORDER BY created_at DESC
+        `;
+        db.all(query, [storeId, startDate, endDate], (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+})
+
 app.whenReady().then(() => {
     createSelectorWindow()
 
@@ -916,18 +927,18 @@ app.on('window-all-closed', () => {
 ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, endDate }) => {
     return new Promise(async (resolve, reject) => {
         if (!storeId) {
-            resolve({ success: false, message: 'Store ID required' })
+            resolve({ success: false, message: 'Store ID gereklidir.' })
             return
         }
 
         // Get Credentials
         db.get('SELECT api_key, api_secret, seller_id FROM stores WHERE id = ?', [storeId], async (err, row) => {
             if (err) {
-                resolve({ success: false, message: 'Database error: ' + err.message })
+                resolve({ success: false, message: 'Veritabanı hatası: ' + err.message })
                 return
             }
             if (!row || !row.seller_id || (!row.api_key && !row.api_secret)) {
-                resolve({ success: false, message: 'API Credentials missing for this store.' })
+                resolve({ success: false, message: 'API Entegrasyonları mevcut mağaza için eksik.' })
                 return
             }
 
@@ -1018,3 +1029,17 @@ ipcMain.handle("get-entry-by-id", async (event, id) => {
         })
     })
 })
+
+// Handle confirmation response from renderer for window close
+ipcMain.on('close-confirmation-response', (event, confirmed) => {
+    if (confirmed && selectorWindow && !selectorWindow.isDestroyed()) {
+        // Force close all store windows first
+        storeWindows.forEach((win) => {
+            if (!win.isDestroyed()) win.close();
+        });
+        storeWindows.clear();
+
+        // Now close selector window
+        selectorWindow.destroy();
+    }
+});

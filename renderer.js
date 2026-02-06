@@ -122,6 +122,176 @@ function getValidationStatus() {
     return { map: statusMap, allValid };
 }
 
+// ==========================================
+// CUSTOM ALERT MODAL FUNCTION
+// ==========================================
+/**
+ * Shows a custom alert modal
+ * @param {string} message - The message to display
+ * @param {string} type - Type of alert: 'success', 'error', 'warning', 'info' (default: 'info')
+ * @param {string} title - Optional custom title
+ */
+function showAlert(message, type = 'info', title = null) {
+    const modal = document.getElementById('alert-modal');
+    const titleEl = document.getElementById('alert-title');
+    const messageEl = document.getElementById('alert-message');
+    const iconContainer = document.getElementById('alert-icon-container');
+    const okBtn = document.getElementById('btn-alert-ok');
+
+    if (!modal || !titleEl || !messageEl || !iconContainer || !okBtn) {
+        // Fallback to native alert if modal not found
+        alert(message);
+        return;
+    }
+
+    // Set message
+    messageEl.textContent = message;
+
+    // Define icon and color configs
+    const configs = {
+        success: {
+            title: 'Başarılı',
+            bgColor: 'bg-green-100',
+            iconColor: 'text-green-600',
+            btnColor: 'bg-green-600 hover:bg-green-700 focus:ring-green-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>`
+        },
+        error: {
+            title: 'Hata',
+            bgColor: 'bg-red-100',
+            iconColor: 'text-red-600',
+            btnColor: 'bg-red-600 hover:bg-red-700 focus:ring-red-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>`
+        },
+        warning: {
+            title: 'Uyarı',
+            bgColor: 'bg-yellow-100',
+            iconColor: 'text-yellow-600',
+            btnColor: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>`
+        },
+        info: {
+            title: 'Bildirim',
+            bgColor: 'bg-blue-100',
+            iconColor: 'text-blue-600',
+            btnColor: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300',
+            icon: `<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>`
+        }
+    };
+
+    const config = configs[type] || configs.info;
+
+    // Set title
+    titleEl.textContent = title || config.title;
+
+    // Reset icon container classes
+    iconContainer.className = `mx-auto flex items-center justify-center h-12 w-12 rounded-full ${config.bgColor}`;
+    iconContainer.innerHTML = `<div class="${config.iconColor}">${config.icon}</div>`;
+
+    // Reset button classes
+    okBtn.className = `px-4 py-2 text-white text-sm font-medium rounded-md w-full shadow-sm focus:outline-none focus:ring-2 ${config.btnColor}`;
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Close handler
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        okBtn.removeEventListener('click', closeModal);
+        modal.removeEventListener('click', outsideClickHandler);
+    };
+
+    // Outside click handler
+    const outsideClickHandler = (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    };
+
+    // Attach listeners
+    okBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', outsideClickHandler);
+}
+
+// ==========================================
+// CUSTOM CONFIRM MODAL FUNCTION
+// ==========================================
+/**
+ * Shows a custom confirmation modal
+ * @param {string} title - The title of the confirmation
+ * @param {string} message - The message to display
+ * @param {function} onConfirm - Callback when user confirms
+ * @param {function} onCancel - Optional callback when user cancels
+ * @param {string} confirmText - Optional text for confirm button (default: 'Evet')
+ * @param {string} cancelText - Optional text for cancel button (default: 'İptal')
+ */
+function showConfirm(title, message, onConfirm, onCancel = null, confirmText = 'Evet', cancelText = 'İptal') {
+    const modal = document.getElementById('confirmation-modal');
+    const titleEl = document.getElementById('modal-title');
+    const messageEl = document.getElementById('modal-message');
+    const confirmBtn = document.getElementById('btn-modal-confirm');
+    const cancelBtn = document.getElementById('btn-modal-cancel');
+
+    if (!modal || !titleEl || !messageEl || !confirmBtn || !cancelBtn) {
+        // Fallback to native confirm if modal not found
+        if (confirm(message)) {
+            if (onConfirm) onConfirm();
+        } else {
+            if (onCancel) onCancel();
+        }
+        return;
+    }
+
+    // Set content
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Close handler
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        confirmBtn.removeEventListener('click', confirmHandler);
+        cancelBtn.removeEventListener('click', cancelHandler);
+        modal.removeEventListener('click', outsideClickHandler);
+    };
+
+    // Confirm handler
+    const confirmHandler = () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+    };
+
+    // Cancel handler
+    const cancelHandler = () => {
+        closeModal();
+        if (onCancel) onCancel();
+    };
+
+    // Outside click handler
+    const outsideClickHandler = (e) => {
+        if (e.target === modal) {
+            cancelHandler();
+        }
+    };
+
+    // Attach listeners
+    confirmBtn.addEventListener('click', confirmHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
+    modal.addEventListener('click', outsideClickHandler);
+}
+
 // DOM Elements
 const sourceImportBtn = document.getElementById('btn-import-source');
 const targetImportBtn = document.getElementById('btn-import-target');
@@ -183,6 +353,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Multi-tenancy init
     initializeStoreLogic();
 
+    // Event Delegation for Archive Tables
+    setupArchiveEventDelegation();
+
     // Initialize Settings Logic
     setupSettingsView();
     initSettingsLogic();
@@ -241,6 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLoadTargetArchive = document.getElementById('btn-load-target-archive');
     const targetDateFilter = document.getElementById('target-date-filter');
 
+    // Setup Event Delegation for Archives
+    setupArchiveEventDelegation();
+
     // Set today as default date
     if (targetDateFilter) {
         targetDateFilter.valueAsDate = new Date();
@@ -252,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedDate) {
                 loadArchiveFromDate(selectedDate);
             } else {
-                alert('Lütfen bir tarih seçiniz.');
+                showAlert('Lütfen bir tarih seçiniz.', 'warning');
             }
         });
     }
@@ -268,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isPreparationStarted) return;
 
             if (!currentStore) {
-                alert('Lütfen bir mağaza seçiniz.');
+                showAlert('Lütfen bir mağaza seçiniz.', 'warning');
                 return;
             }
 
@@ -365,8 +541,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 processAndRenderData('source');
                 updateColumnDropdown('source', headers);
 
-                // Standard Ops
-                performPackageCount('source');
+                // Standard Ops (silent mode to avoid modals during auto-fetch)
+                performPackageCount('source', true);
 
                 // Realtime Update Logic
                 handleSourceDataUpdate(tableData, true);
@@ -381,6 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 await detectAndPopulateCancels();
 
                 log.info('Auto-fetch successful');
+            } else if (!res.success) {
+                // Handle API errors (credentials missing, etc.)
+                log.error('Auto-fetch failed:', res.message);
+                showAlert(res.message || 'Veri çekme işlemi başarısız oldu.', 'error');
             }
         } catch (err) {
             log.error('Auto-fetch error:', err);
@@ -391,178 +571,182 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnMarkShipped) {
         btnMarkShipped.addEventListener('click', async () => {
             if (!currentStore) {
-                alert('Lütfen önce bir mağaza seçiniz.');
+                showAlert('Lütfen önce bir mağaza seçiniz.', 'warning');
                 return;
             }
 
             // 1. Validation Logic
             const validation = getValidationStatus();
             if (!validation.allValid) {
-                alert('Tüm ürün adetleri kaynak liste ile eşleşmiyor. Lütfen kırmızı ile işaretli satırları kontrol ediniz.');
+                showAlert('Tüm ürün adetleri kaynak liste ile eşleşmiyor. Lütfen kırmızı ile işaretli satırları kontrol ediniz.', 'error');
                 return;
             }
 
             // 2. Data Check (Source should exist)
             const sourceData = importedDataState['source'];
             if (!sourceData || sourceData.length < 2) {
-                alert('Hazırlanacak sipariş listesi boş.');
+                showAlert('Hazırlanacak sipariş listesi boş.', 'warning');
                 return;
             }
 
-            const confirmed = confirm('İptaller arşivlenecek ve tablolar temizlenecek. Devam etmek istiyor musunuz?');
-            if (!confirmed) return;
+            showConfirm(
+                'İşlemi Onayla',
+                'İptaller arşivlenecek ve tablolar temizlenecek. Devam etmek istiyor musunuz?',
+                async () => {
 
-            try {
-                // 1. Save Filtered Source Data (Original Orders - Cancels) to Cargo Archive
-                // We use original source data (ham veri) but exclude cancelled orders
-                let sourceData = originalDataState['source'] || importedDataState['source'];
+                    try {
+                        // 1. Save Filtered Source Data (Original Orders - Cancels) to Cargo Archive
+                        // We use original source data (ham veri) but exclude cancelled orders
+                        let sourceData = originalDataState['source'] || importedDataState['source'];
 
-                if (sourceData && sourceData.length > 1) {
-                    // Identify Cancelled Orders
-                    const cancelsData = importedDataState['cancels'];
-                    const cancelledOrderNos = new Set();
+                        if (sourceData && sourceData.length > 1) {
+                            // Identify Cancelled Orders
+                            const cancelsData = importedDataState['cancels'];
+                            const cancelledOrderNos = new Set();
 
-                    if (cancelsData && cancelsData.length > 1) {
-                        // Flexible column search for Order No
-                        const cHeader = cancelsData[0];
-                        const cOrderNoIdx = cHeader.findIndex(h => h && (
-                            h.toString().toLowerCase().includes('sipariş no') ||
-                            h.toString().toLowerCase().includes('sipariş numara') ||
-                            h.toString().toLowerCase().includes('order no') ||
-                            h.toString().toLowerCase().includes('order num') ||
-                            h.toString().toLowerCase().includes('siparis no')
-                        ));
+                            if (cancelsData && cancelsData.length > 1) {
+                                // Flexible column search for Order No
+                                const cHeader = cancelsData[0];
+                                const cOrderNoIdx = cHeader.findIndex(h => h && (
+                                    h.toString().toLowerCase().includes('sipariş no') ||
+                                    h.toString().toLowerCase().includes('sipariş numara') ||
+                                    h.toString().toLowerCase().includes('order no') ||
+                                    h.toString().toLowerCase().includes('order num') ||
+                                    h.toString().toLowerCase().includes('siparis no')
+                                ));
 
-                        if (cOrderNoIdx !== -1) {
-                            // Skip header row
-                            for (let i = 1; i < cancelsData.length; i++) {
-                                const val = cancelsData[i][cOrderNoIdx];
-                                if (val) cancelledOrderNos.add(val.toString().trim());
+                                if (cOrderNoIdx !== -1) {
+                                    // Skip header row
+                                    for (let i = 1; i < cancelsData.length; i++) {
+                                        const val = cancelsData[i][cOrderNoIdx];
+                                        if (val) cancelledOrderNos.add(val.toString().trim());
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    // Filter Source Data
-                    const sHeader = sourceData[0];
-                    const sOrderNoIdx = sHeader.findIndex(h => h && (
-                        h.toString().toLowerCase().includes('sipariş no') ||
-                        h.toString().toLowerCase().includes('sipariş numara') ||
-                        h.toString().toLowerCase().includes('order no') ||
-                        h.toString().toLowerCase().includes('order num') ||
-                        h.toString().toLowerCase().includes('siparis no')
-                    ));
+                            // Filter Source Data
+                            const sHeader = sourceData[0];
+                            const sOrderNoIdx = sHeader.findIndex(h => h && (
+                                h.toString().toLowerCase().includes('sipariş no') ||
+                                h.toString().toLowerCase().includes('sipariş numara') ||
+                                h.toString().toLowerCase().includes('order no') ||
+                                h.toString().toLowerCase().includes('order num') ||
+                                h.toString().toLowerCase().includes('siparis no')
+                            ));
 
-                    // Check for Status Column (to update instead of append)
-                    const statusIdx = sHeader.findIndex(h => h && (
-                        h.toString().toLowerCase().trim() === 'sipariş statüsü' ||
-                        h.toString().toLowerCase().trim() === 'kargo durumu' ||
-                        h.toString().toLowerCase().trim() === 'durum' ||
-                        h.toString().toLowerCase().trim() === 'status'
-                    ));
+                            // Check for Status Column (to update instead of append)
+                            const statusIdx = sHeader.findIndex(h => h && (
+                                h.toString().toLowerCase().trim() === 'sipariş statüsü' ||
+                                h.toString().toLowerCase().trim() === 'kargo durumu' ||
+                                h.toString().toLowerCase().trim() === 'durum' ||
+                                h.toString().toLowerCase().trim() === 'status'
+                            ));
 
-                    // Prepare Archive Data
-                    const filteredArchive = [];
+                            // Prepare Archive Data
+                            const filteredArchive = [];
 
-                    // Headers
-                    if (statusIdx !== -1) {
-                        filteredArchive.push([...sHeader]);
-                    } else {
-                        // Fallback: Add column if missing (User prefers Sipariş Statüsü)
-                        filteredArchive.push([...sHeader, 'Sipariş Statüsü']);
-                    }
-
-                    for (let i = 1; i < sourceData.length; i++) {
-                        const row = sourceData[i];
-                        const orderNo = (sOrderNoIdx !== -1 && row[sOrderNoIdx]) ? row[sOrderNoIdx].toString().trim() : null;
-
-                        // KEY FIX: Only add if orderNo exists AND is not cancelled
-                        if (orderNo && !cancelledOrderNos.has(orderNo)) {
-                            const newRow = [...row];
+                            // Headers
                             if (statusIdx !== -1) {
-                                newRow[statusIdx] = 'Kargoya Verildi';
+                                filteredArchive.push([...sHeader]);
                             } else {
-                                newRow.push('Kargoya Verildi');
+                                // Fallback: Add column if missing (User prefers Sipariş Statüsü)
+                                filteredArchive.push([...sHeader, 'Sipariş Statüsü']);
                             }
-                            filteredArchive.push(newRow);
+
+                            for (let i = 1; i < sourceData.length; i++) {
+                                const row = sourceData[i];
+                                const orderNo = (sOrderNoIdx !== -1 && row[sOrderNoIdx]) ? row[sOrderNoIdx].toString().trim() : null;
+
+                                // KEY FIX: Only add if orderNo exists AND is not cancelled
+                                if (orderNo && !cancelledOrderNos.has(orderNo)) {
+                                    const newRow = [...row];
+                                    if (statusIdx !== -1) {
+                                        newRow[statusIdx] = 'Kargoya Verildi';
+                                    } else {
+                                        newRow.push('Kargoya Verildi');
+                                    }
+                                    filteredArchive.push(newRow);
+                                }
+                            }
+
+                            if (filteredArchive.length > 1) {
+                                await saveToDailyArchive('cargo', filteredArchive);
+                                log.info(`Cargo archive saved: ${filteredArchive.length - 1} orders (Filtered out ${cancelledOrderNos.size} cancels)`);
+                            }
                         }
-                    }
 
-                    if (filteredArchive.length > 1) {
-                        await saveToDailyArchive('cargo', filteredArchive);
-                        log.info(`Cargo archive saved: ${filteredArchive.length - 1} orders (Filtered out ${cancelledOrderNos.size} cancels)`);
-                    }
-                }
+                        // 2. Prepare Cancels Archive Data (if exists)
+                        const cancelsData = importedDataState['cancels'];
+                        if (cancelsData && cancelsData.length > 1) {
+                            const cancelsArchiveData = JSON.parse(JSON.stringify(cancelsData));
+                            const cancelsHeaders = cancelsArchiveData[0];
 
-                // 2. Prepare Cancels Archive Data (if exists)
-                const cancelsData = importedDataState['cancels'];
-                if (cancelsData && cancelsData.length > 1) {
-                    const cancelsArchiveData = JSON.parse(JSON.stringify(cancelsData));
-                    const cancelsHeaders = cancelsArchiveData[0];
+                            // Add 'İptal Aşaması' Column
+                            cancelsHeaders.push('İptal Aşaması');
 
-                    // Add 'İptal Aşaması' Column
-                    cancelsHeaders.push('İptal Aşaması');
+                            for (let i = 1; i < cancelsArchiveData.length; i++) {
+                                cancelsArchiveData[i].push('Hazırlanmayı Beklerken İptal');
+                            }
 
-                    for (let i = 1; i < cancelsArchiveData.length; i++) {
-                        cancelsArchiveData[i].push('Hazırlanmayı Beklerken İptal');
-                    }
+                            // Save to Cancels Archive
+                            await saveToDailyArchive('cancel', cancelsArchiveData);
+                            log.info('Cancels archive saved successfully');
+                        }
 
-                    // Save to Cancels Archive
-                    await saveToDailyArchive('cancel', cancelsArchiveData);
-                    log.info('Cancels archive saved successfully');
-                }
+                        // Clear State
+                        importedDataState['source'] = null;
+                        originalDataState['source'] = null;
+                        importedDataState['target'] = null;
+                        originalDataState['target'] = null;
+                        importedDataState['cancels'] = null;
+                        originalDataState['cancels'] = null;
+                        activeOperationState['source'] = null;
+                        activeOperationState['target'] = null;
+                        activeOperationState['cancels'] = null;
+                        previousRawSourceData = null; // Clear previous source data
 
-                // Clear State
-                importedDataState['source'] = null;
-                originalDataState['source'] = null;
-                importedDataState['target'] = null;
-                originalDataState['target'] = null;
-                importedDataState['cancels'] = null;
-                originalDataState['cancels'] = null;
-                activeOperationState['source'] = null;
-                activeOperationState['target'] = null;
-                activeOperationState['cancels'] = null;
-                previousRawSourceData = null; // Clear previous source data
+                        isPreparationStarted = false;
 
-                isPreparationStarted = false;
+                        // STOP Auto Fetch Intervals
+                        if (autoFetchInterval) clearInterval(autoFetchInterval);
+                        if (statusUpdateInterval) clearInterval(statusUpdateInterval);
+                        autoFetchInterval = null;
+                        statusUpdateInterval = null;
 
-                // STOP Auto Fetch Intervals
-                if (autoFetchInterval) clearInterval(autoFetchInterval);
-                if (statusUpdateInterval) clearInterval(statusUpdateInterval);
-                autoFetchInterval = null;
-                statusUpdateInterval = null;
+                        // 7. Update UI - Clear all tables
+                        processAndRenderData('source');
+                        processAndRenderData('target');
+                        processAndRenderData('cancels');
 
-                // 7. Update UI - Clear all tables
-                processAndRenderData('source');
-                processAndRenderData('target');
-                processAndRenderData('cancels');
+                        if (fileInputSource) fileInputSource.value = '';
+                        if (fileInputTarget) fileInputTarget.value = '';
 
-                if (fileInputSource) fileInputSource.value = '';
-                if (fileInputTarget) fileInputTarget.value = '';
-
-                // Reset Preparation Button
-                if (btnStartPreparation) {
-                    btnStartPreparation.disabled = false;
-                    btnStartPreparation.classList.remove('bg-gray-400', 'cursor-not-allowed', 'opacity-50');
-                    btnStartPreparation.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                    btnStartPreparation.innerHTML = `
+                        // Reset Preparation Button
+                        if (btnStartPreparation) {
+                            btnStartPreparation.disabled = false;
+                            btnStartPreparation.classList.remove('bg-gray-400', 'cursor-not-allowed', 'opacity-50');
+                            btnStartPreparation.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                            btnStartPreparation.innerHTML = `
                         <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Hazırlamaya Başla
                     `;
+                        }
+
+                        // Reset Mark Shipped Button (disable it)
+                        btnMarkShipped.disabled = true;
+                        btnMarkShipped.classList.add('opacity-50', 'cursor-not-allowed');
+
+                        log.info('Orders marked as shipped, cancels archived, and all tables cleared.');
+                        showAlert('İşlem başarıyla tamamlandı.\n\n✓ Siparişler kargo arşivine kaydedildi\n✓ İptaller arşivlendi\n✓ Tablolar temizlendi', 'success');
+                    } catch (err) {
+                        log.error('Error in mark shipped flow:', err);
+                        showAlert('Bir hata oluştu: ' + err.message, 'error');
+                    }
                 }
-
-                // Reset Mark Shipped Button (disable it)
-                btnMarkShipped.disabled = true;
-                btnMarkShipped.classList.add('opacity-50', 'cursor-not-allowed');
-
-                log.info('Orders marked as shipped, cancels archived, and all tables cleared.');
-                alert('İşlem başarıyla tamamlandı.\n\n✓ Siparişler kargo arşivine kaydedildi\n✓ İptaller arşivlendi\n✓ Tablolar temizlendi');
-            } catch (err) {
-                log.error('Error in mark shipped flow:', err);
-                alert('Bir hata oluştu: ' + err.message);
-            }
+            );
         });
     }
 });
@@ -967,7 +1151,7 @@ async function filterShippedOrders(data) {
 // Handle File Selection
 function handleFileSelect(event, side) {
     if (!currentStore) {
-        alert("Lütfen önce bir mağaza seçiniz.");
+        showAlert("Lütfen önce bir mağaza seçiniz.", 'warning');
         return;
     }
 
@@ -992,7 +1176,7 @@ function handleFileSelect(event, side) {
         }
 
         if (jsonData.length === 0) {
-            alert('Excel dosyası boş!');
+            showAlert('Excel dosyası boş!', 'error');
             return;
         }
 
@@ -1234,6 +1418,11 @@ function loadFileManagerPage() {
 function loadArchivePage() {
     if (!currentStore) return;
 
+    const isTrendyol = (currentStore.store_type || 'website').toLowerCase() === 'trendyol';
+    if (!isTrendyol) {
+        return loadManualArchivePage();
+    }
+
     const listContainer = document.getElementById('archive-list-container');
     const dateInput = document.getElementById('archive-date-filter');
     const typeInput = document.getElementById('archive-type-filter');
@@ -1268,7 +1457,7 @@ function loadArchivePage() {
                 break;
             case 'specific':
                 if (!dateInput.value) {
-                    alert('Lütfen bir tarih seçiniz.');
+                    showAlert('Lütfen bir tarih seçiniz.', 'warning');
                     return;
                 }
                 startDate = dateInput.value;
@@ -1349,60 +1538,127 @@ function loadArchivePage() {
             `;
             listContainer.appendChild(detailTr);
 
-            // Call setup function to attach event listeners
-            if (tableResult.setup) {
-                // Wait for DOM to be ready
-                setTimeout(() => tableResult.setup(), 0);
-            }
-        });
-
-        // Expand/Collapse functionality
-        const expandBtns = listContainer.querySelectorAll('.expand-detail-btn');
-        expandBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const targetId = btn.getAttribute('data-target');
-                const detailRow = document.getElementById(targetId);
-                const svg = btn.querySelector('svg');
-
-                if (detailRow.classList.contains('hidden')) {
-                    detailRow.classList.remove('hidden');
-                    svg.style.transform = 'rotate(180deg)';
-                    btn.innerHTML = `
-                        <svg class="w-4 h-4 inline-block transition-transform" style="transform: rotate(180deg);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                        Detayları Gizle
-                    `;
-                } else {
-                    detailRow.classList.add('hidden');
-                    svg.style.transform = 'rotate(0deg)';
-                    btn.innerHTML = `
-                        <svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                        Detayları Göster
-                    `;
-                }
-            });
-        });
-
-        // Delete functionality
-        const deleteBtns = listContainer.querySelectorAll('.delete-daily-btn');
-        deleteBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.getAttribute('data-id');
-                showConfirmModal('Kaydı Sil', 'Bu kaydı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.', () => {
-                    ipcRenderer.invoke('param-delete-daily-entry', id).then(res => {
-                        if (res.success) loadArchivePage();
-                    });
-                });
-            });
-        });
-
+        }); // Close forEach
     }).catch(err => {
         console.error('Archive Load Error:', err);
         listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Hata oluştu.</td></tr>';
     });
+}
+
+// Load Manual Archive Page (For non-Trendyol stores)
+function loadManualArchivePage() {
+    const listContainer = document.getElementById('archive-list-container');
+    const dateInput = document.getElementById('archive-date-filter');
+    const rangeSelect = document.getElementById('archive-range-filter');
+
+    if (!listContainer) return;
+
+    // Calculate Range
+    const todayStr = new Date().toISOString().split('T')[0];
+    let startDate = todayStr;
+    let endDate = todayStr;
+
+    if (rangeSelect) {
+        const range = rangeSelect.value;
+        const d = new Date();
+        switch (range) {
+            case 'last_week':
+                d.setDate(d.getDate() - 7);
+                startDate = d.toISOString().split('T')[0];
+                break;
+            case 'last_2_weeks':
+                d.setDate(d.getDate() - 14);
+                startDate = d.toISOString().split('T')[0];
+                break;
+            case 'last_month':
+                d.setDate(d.getDate() - 30);
+                startDate = d.toISOString().split('T')[0];
+                break;
+            case 'today':
+                break;
+            case 'specific':
+                if (dateInput && dateInput.value) {
+                    startDate = dateInput.value;
+                    endDate = dateInput.value;
+                }
+                break;
+        }
+    } else if (dateInput && dateInput.value) {
+        startDate = dateInput.value;
+        endDate = dateInput.value;
+    }
+
+    listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Yükleniyor...</td></tr>';
+
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.invoke('db-get-manual-cargo-entries', { storeId: currentStore.id, startDate, endDate })
+        .then(rows => {
+            if (!rows || rows.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Kayıt bulunamadı.</td></tr>';
+                return;
+            }
+
+            // Group by Date
+            const grouped = {};
+            rows.forEach(r => {
+                const date = r.created_at ? r.created_at.split(' ')[0] : 'Tarihsiz';
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(r);
+            });
+
+            listContainer.innerHTML = '';
+
+            Object.keys(grouped).sort().reverse().forEach((date, idx) => {
+                const dayRows = grouped[date];
+                const dataSummary = `${dayRows.length} ürün girişi (${date})`;
+                const uniqueId = `manual-archive-${idx}`;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+                tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dataSummary}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button class="expand-detail-btn text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded" data-target="${uniqueId}">
+                         <svg class="w-4 h-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg> Detay
+                    </button>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                   <span class="text-xs text-gray-400">Manuel</span>
+                </td>
+            `;
+                listContainer.appendChild(tr);
+
+                const detailTr = document.createElement('tr');
+                detailTr.id = uniqueId;
+                detailTr.className = 'hidden bg-gray-50';
+
+                let innerHTML = `
+                <div class="p-4 bg-white border m-4 rounded shadow-sm">
+                <table class="min-w-full divide-y divide-gray-200 text-xs">
+                    <thead class="bg-gray-100"><tr><th class="px-2 py-1 text-left">Ürün</th><th class="px-2 py-1 text-left">Paket</th><th class="px-2 py-1 text-left">Adet</th><th class="px-2 py-1 text-left">Barkod</th><th class="px-2 py-1 text-left">Saat</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+            `;
+                dayRows.forEach(item => {
+                    const time = item.created_at ? item.created_at.split(' ')[1] : '';
+                    innerHTML += `<tr>
+                    <td class="px-2 py-1 font-medium text-gray-900">${item.product_name || '-'}</td>
+                    <td class="px-2 py-1">${item.package_count || 0}</td>
+                    <td class="px-2 py-1">${item.quantity || 0}</td>
+                    <td class="px-2 py-1 font-mono text-gray-600">${item.barcode || '-'}</td>
+                    <td class="px-2 py-1 text-gray-400">${time}</td>
+                </tr>`;
+                });
+                innerHTML += `</tbody></table></div>`;
+
+                detailTr.innerHTML = `<td colspan="3" class="p-0 border-0">${innerHTML}</td>`;
+                listContainer.appendChild(detailTr);
+            });
+
+        })
+        .catch(err => {
+            console.error(err);
+            listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Hata: ' + err.message + '</td></tr>';
+        });
 }
 
 // Load Cancels Archive Page (only cancel type)
@@ -1417,7 +1673,7 @@ function loadCancelsArchivePage() {
     const date = dateInput.value;
 
     if (!date) {
-        alert('Lütfen bir tarih seçiniz.');
+        showAlert('Lütfen bir tarih seçiniz.', 'warning');
         return;
     }
 
@@ -1466,35 +1722,6 @@ function loadCancelsArchivePage() {
 `;
             listContainer.appendChild(detailTr);
             if (tableResult.setup) { setTimeout(() => tableResult.setup(), 0); }
-        });
-        const expandBtns = listContainer.querySelectorAll('.expand-detail-btn');
-        expandBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const targetId = btn.getAttribute('data-target');
-                const detailRow = document.getElementById(targetId);
-                if (detailRow.classList.contains('hidden')) {
-                    detailRow.classList.remove('hidden');
-                    btn.innerHTML = `<svg class="w-4 h-4 inline-block transition-transform" style="transform: rotate(180deg);" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>Detayları Gizle`;
-                } else {
-                    detailRow.classList.add('hidden');
-                    btn.innerHTML = `<svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>Detayları Göster`;
-                }
-            });
-        });
-        const deleteBtns = listContainer.querySelectorAll('.delete-daily-btn');
-        deleteBtns.forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const entryId = btn.getAttribute('data-id');
-                if (!confirm('Bu iptal kaydını silmek istediğinizden emin misiniz?')) return;
-                try {
-                    await ipcRenderer.invoke('param-delete-daily-entry', { id: entryId });
-                    log.info(`Deleted cancels archive entry ${entryId}`);
-                    loadCancelsArchivePage();
-                } catch (err) {
-                    console.error('Delete Error:', err);
-                    alert('Silme işlemi başarısız oldu.');
-                }
-            });
         });
     }).catch(err => {
         console.error('Cancels Archive Load Error:', err);
@@ -1712,7 +1939,7 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
                     if (res.success) {
                         loadArchivePage();
                     } else {
-                        alert('Silme işlemi başarısız: ' + res.message);
+                        showAlert('Silme işlemi başarısız: ' + res.message, 'error');
                     }
                 });
             });
@@ -1838,7 +2065,7 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
                     }
                 } catch (err) {
                     log.error('Failed to save archive changes:', err);
-                    alert('Değişiklikler kaydedilemedi: ' + err.message);
+                    showAlert('Değişiklikler kaydedilemedi: ' + err.message, 'error');
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>Değişiklikleri Kaydet';
                 }
@@ -2141,7 +2368,7 @@ const btnAutoImport = document.getElementById('trendyol-auto-import-btn');
 if (btnAutoImport) {
     btnAutoImport.addEventListener('click', async () => {
         if (!currentStore) {
-            alert('Lütfen önce bir mağaza seçiniz/oluşturunuz.');
+            showAlert('Lütfen önce bir mağaza seçiniz/oluşturunuz.', 'warning');
             return;
         }
 
@@ -2174,7 +2401,7 @@ if (btnAutoImport) {
                 log.info(`Fetched ${res.data.length} rows from API`);
 
                 if (res.data.length === 0) {
-                    alert('Çekilecek sipariş bulunamadı.');
+                    showAlert('Çekilecek sipariş bulunamadı.', 'info');
                     return;
                 }
 
@@ -2215,13 +2442,13 @@ if (btnAutoImport) {
                 currentSourceFileId = null; // Not linked to a file batch
 
             } else {
-                alert('Hata: ' + res.message);
+                showAlert('Hata: ' + res.message, 'error');
                 // importedDataState['source'] = null;
                 // processAndRenderData('source'); 
             }
         } catch (err) {
             log.error('API Call Error:', err);
-            alert('Beklenmedik bir hata oluştu.');
+            showAlert('Beklenmedik bir hata oluştu.', 'error');
             btnAutoImport.disabled = false;
             btnAutoImport.innerHTML = `... Auto`; // Reset simplified
         }
@@ -2435,13 +2662,13 @@ if (manualProductNameInput) {
 if (manualAddConfirmBtn) {
     manualAddConfirmBtn.addEventListener('click', () => {
         if (!selectedManualProduct) {
-            alert('Lütfen listeden bir ürün seçiniz.');
+            showAlert('Lütfen listeden bir ürün seçiniz.', 'warning');
             return;
         }
 
         const count = parseInt(manualPackageCountInput.value) || 0;
         if (count <= 0) {
-            alert('Lütfen geçerli bir paket sayısı giriniz.');
+            showAlert('Lütfen geçerli bir paket sayısı giriniz.', 'warning');
             return;
         }
 
@@ -2569,7 +2796,7 @@ if (manualAddConfirmBtn) {
     });
 }
 
-function performPackageCount(side) {
+function performPackageCount(side, silent = false) {
     // Check if we need to revert
     if (activeOperationState[side] === 'package_count') {
         // REVERT
@@ -2604,7 +2831,10 @@ function performPackageCount(side) {
     // Always calculate from ORIGINAL data to avoid compounding errors
     const data = originalDataState[side];
     if (!data || data.length < 2) {
-        alert('İşlem yapmak için veri bulunamadı.');
+        // Only show alert if not in silent mode (manual operations)
+        if (!silent) {
+            showAlert('İşlem yapmak için veri bulunamadı.', 'warning');
+        }
         return;
     }
 
@@ -2616,7 +2846,7 @@ function performPackageCount(side) {
     });
 
     if (barcodeIndex === -1) {
-        alert('"Barkod" isminde bir kolon bulunamadı!');
+        showAlert('"Barkod" isminde bir kolon bulunamadı!', 'error');
         return;
     }
 
@@ -2628,7 +2858,7 @@ function performPackageCount(side) {
     });
 
     if (quantityIndex === -1) {
-        alert('"Adet" (veya Miktar/Quantity) isminde bir kolon bulunamadı!');
+        showAlert('"Adet" (veya Miktar/Quantity) isminde bir kolon bulunamadı!', 'error');
         return;
     }
 
@@ -2825,7 +3055,7 @@ if (cancelsLoadArchiveBtn) {
             // But usually this button is in Cancels toolbar, implying we want to see cancels for that date.
             loadArchiveFromDate(date);
         } else {
-            alert('Lütfen bir tarih seçiniz.');
+            showAlert('Lütfen bir tarih seçiniz.', 'warning');
         }
     });
 }
@@ -3425,16 +3655,16 @@ function initIntegrationSettings() {
             const sellerId = setSellerIdInput ? setSellerIdInput.value.trim() : '';
 
             if (!storeId) {
-                alert('Lütfen bir mağaza seçiniz.');
+                showAlert('Lütfen bir mağaza seçiniz.', 'warning');
                 return;
             }
 
             const { ipcRenderer } = require('electron');
             ipcRenderer.invoke('db-update-store-integration', { id: storeId, apiKey, apiSecret, sellerId }).then(res => {
                 if (res.success) {
-                    alert('Entegrasyon ayarları kaydedildi.');
+                    showAlert('Entegrasyon ayarları kaydedildi.', 'success');
                 } else {
-                    alert('Kaydetme başarısız: ' + res.message);
+                    showAlert('Kaydetme başarısız: ' + res.message, 'error');
                 }
             });
         });
@@ -3609,20 +3839,28 @@ function renderFileManagerPageList(container, files) {
     const deleteBtns = container.querySelectorAll('.delete-file-btn');
     deleteBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
-            if (confirm('Dosyayı ve içerdiği verileri silmek istediğinize emin misiniz?')) {
-                const id = e.target.getAttribute('data-id');
-                const { ipcRenderer } = require('electron');
-                ipcRenderer.invoke('db-delete-batch', id).then(res => {
-                    if (res.success) {
-                        loadFileManagerPage(); // Reload
-                        loadImportHistory('source');
-                        loadImportHistory('target');
-                        loadImportHistory('cancels');
-                    } else {
-                        alert('Silme başarısız');
-                    }
-                });
-            }
+            const id = e.target.getAttribute('data-id');
+            const { ipcRenderer } = require('electron');
+
+            showConfirm(
+                'Dosya Sil',
+                'Dosyayı ve içerdiği verileri silmek istediğinize emin misiniz?',
+                () => {
+                    ipcRenderer.invoke('db-delete-batch', id).then(res => {
+                        if (res.success) {
+                            loadFileManagerPage();
+                            loadImportHistory('source');
+                            loadImportHistory('target');
+                            loadImportHistory('cancels');
+                        } else {
+                            showAlert('Silme başarısız', 'error');
+                        }
+                    });
+                },
+                null,
+                'Sil',
+                'İptal'
+            );
         });
     });
 }
@@ -3846,7 +4084,7 @@ if (btnFetchTrendyolCancels) {
 
 async function loadTrendyolCancels() {
     if (!currentStore) {
-        alert("Lütfen önce bir mağaza seçiniz.");
+        showAlert("Lütfen önce bir mağaza seçiniz.", 'warning');
         return;
     }
 
@@ -3885,7 +4123,7 @@ async function loadTrendyolCancels() {
         });
 
         if (!apiRes.success) {
-            alert('Hata: ' + apiRes.message);
+            showAlert('Hata: ' + apiRes.message, 'error');
             listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Veri çekilemedi.</td></tr>';
             return;
         }
@@ -4082,11 +4320,11 @@ async function deleteOrderFromEntry(entryId, orderNoToDelete) {
         });
 
         if (!res.success) {
-            alert('Silme işlemi başarısız: ' + (res.message || 'Bilinmeyen hata'));
+            showAlert('Silme işlemi başarısız: ' + (res.message || 'Bilinmeyen hata'), 'error');
         }
     } catch (err) {
         log.error('Delete order error:', err);
-        alert('İşlem sırasında hata oluştu.');
+        showAlert('İşlem sırasında hata oluştu.', 'error');
     }
 }
 
@@ -4106,7 +4344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnManualCargoAdd) {
         btnManualCargoAdd.addEventListener('click', () => {
             if (!currentStore) {
-                alert('Lütfen önce bir mağaza seçiniz.');
+                showAlert('Lütfen önce bir mağaza seçiniz.', 'warning');
                 return;
             }
             // Clear existing rows
@@ -4154,6 +4392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnSaveManualCargo) {
         btnSaveManualCargo.addEventListener('click', async () => {
+            const { ipcRenderer } = require('electron');
             if (!currentStore) return;
 
             const rows = manualCargoTableBody.querySelectorAll('tr');
@@ -4171,7 +4410,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (entries.length === 0) {
-                alert('Lütfen en az bir satır veri giriniz.');
+                showAlert('Lütfen en az bir satır veri giriniz.', 'warning');
                 return;
             }
 
@@ -4187,20 +4426,112 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (result.success) {
-                    alert(`${result.count} adet kayıt başarıyla eklendi.`);
+                    showAlert(`${result.count} adet kayıt başarıyla eklendi.`, 'success');
                     closeManualCargoModal();
                 } else {
-                    alert('Kayıt sırasında bir hata oluştu.');
+                    showAlert('Kayıt sırasında bir hata oluştu.', 'error');
                 }
             } catch (error) {
                 console.error('Save error:', error);
-                alert('Hata: ' + error.message);
+                showAlert('Hata: ' + error.message, 'error');
             } finally {
                 btnSaveManualCargo.disabled = false;
                 btnSaveManualCargo.textContent = 'Kaydet';
+
+                // Focus Restoration Logic
+                if (manualCargoModal && !manualCargoModal.classList.contains('hidden')) {
+                    // If modal stays open (error), focus the button to keep tab index active
+                    btnSaveManualCargo.focus();
+                } else {
+                    // If modal closed, focus the trigger button on main page
+                    const btnOpen = document.getElementById('btn-manual-cargo-add');
+                    if (btnOpen) btnOpen.focus();
+                }
             }
         });
     }
 });
+
+
+function setupArchiveEventDelegation() {
+    const archiveListContainer = document.getElementById('archive-list-container');
+    const cancelsListContainer = document.getElementById('cancels-archive-list-container');
+
+    const handleExpandCallback = (e) => {
+        const btn = e.target.closest('.expand-detail-btn');
+        if (!btn) return;
+
+        const targetId = btn.getAttribute('data-target');
+        const detailRow = document.getElementById(targetId);
+        const svg = btn.querySelector('svg');
+
+        if (!detailRow) return;
+
+        if (detailRow.classList.contains('hidden')) {
+            detailRow.classList.remove('hidden');
+            if (svg) svg.style.transform = 'rotate(180deg)';
+            btn.innerHTML = `
+                <svg class="w-4 h-4 inline-block transition-transform" style="transform: rotate(180deg);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+                Gizle
+            `;
+        } else {
+            detailRow.classList.add('hidden');
+            if (svg) svg.style.transform = 'rotate(0deg)';
+            btn.innerHTML = `
+                <svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+                Detay
+            `;
+        }
+    };
+
+    const handleDeleteCallback = (e) => {
+        const btn = e.target.closest('.delete-daily-btn');
+        if (!btn) return;
+
+        const id = btn.getAttribute('data-id');
+        const { ipcRenderer } = require('electron');
+
+        const confirmMsg = 'Bu kaydı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.';
+
+        if (typeof showConfirmModal === 'function') {
+            showConfirmModal('Kaydı Sil', confirmMsg, () => {
+                executeDelete(id);
+            });
+        } else {
+            showConfirm('Kaydı Sil', confirmMsg, () => {
+                executeDelete(id);
+            });
+        }
+
+
+        function executeDelete(entryId) {
+            const isCancel = btn.closest('#cancels-archive-list-container') !== null;
+
+            if (isCancel) {
+                ipcRenderer.invoke('param-delete-daily-entry', { id: entryId }).then(res => {
+                    if (res.success) loadCancelsArchivePage();
+                });
+            } else {
+                ipcRenderer.invoke('param-delete-daily-entry', entryId).then(res => {
+                    if (res.success) loadArchivePage();
+                });
+            }
+        }
+    };
+
+    if (archiveListContainer) {
+        archiveListContainer.addEventListener('click', handleExpandCallback);
+        archiveListContainer.addEventListener('click', handleDeleteCallback);
+    }
+
+    if (cancelsListContainer) {
+        cancelsListContainer.addEventListener('click', handleExpandCallback);
+        cancelsListContainer.addEventListener('click', handleDeleteCallback);
+    }
+}
 
 
