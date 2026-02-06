@@ -776,20 +776,41 @@ function initializeStoreLogic() {
 
             const isTrendyol = (store.store_type || 'website').toLowerCase() === 'trendyol';
             const btnDashboard = document.getElementById('btn-nav-dashboard');
+            const btnFileManager = document.getElementById('btn-nav-files');
+            const btnSettings = document.getElementById('btn-nav-settings');
+            const btnCancelsArchive = document.getElementById('btn-nav-cancels-archive');
 
             if (isTrendyol) {
-                // TRENDYOL
+                // TRENDYOL - Enable all features
                 if (btnDashboard) {
                     btnDashboard.classList.remove('opacity-50', 'pointer-events-none');
+                }
+                if (btnFileManager) {
+                    btnFileManager.classList.remove('opacity-50', 'pointer-events-none');
+                }
+                if (btnSettings) {
+                    btnSettings.classList.remove('opacity-50', 'pointer-events-none');
+                }
+                if (btnCancelsArchive) {
+                    btnCancelsArchive.classList.remove('opacity-50', 'pointer-events-none');
                 }
                 const headerTitle = document.getElementById('header-title');
                 if (headerTitle) headerTitle.textContent = `SİPARİŞ YÖNETİMİ - ${store.name.toUpperCase()}`;
 
                 switchView('dashboard');
             } else {
-                // OTHER
+                // OTHER STORES - Disable Trendyol-specific features
                 if (btnDashboard) {
                     btnDashboard.classList.add('opacity-50', 'pointer-events-none');
+                }
+                if (btnFileManager) {
+                    btnFileManager.classList.add('opacity-50', 'pointer-events-none');
+                }
+                if (btnSettings) {
+                    btnSettings.classList.add('opacity-50', 'pointer-events-none');
+                }
+                if (btnCancelsArchive) {
+                    btnCancelsArchive.classList.add('opacity-50', 'pointer-events-none');
                 }
                 const headerTitle = document.getElementById('header-title');
                 if (headerTitle) headerTitle.textContent = `KARGO ARŞİVİ - ${store.name.toUpperCase()}`;
