@@ -943,7 +943,7 @@ app.on('window-all-closed', () => {
     }
 })
 
-ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, endDate }) => {
+ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, endDate, page = 0, size = 50 }) => {
     return new Promise(async (resolve, reject) => {
         if (!storeId) {
             resolve({ success: false, message: 'Store ID gereklidir.' })
@@ -965,7 +965,7 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
 
             // Format URL
             // Status: Cancelled
-            const url = `https://api.trendyol.com/sapigw/suppliers/${seller_id}/orders?status=Cancelled&startDate=${startDate}&endDate=${endDate}&orderBy=Date&direction=DESC&size=200`
+            const url = `https://api.trendyol.com/sapigw/suppliers/${seller_id}/orders?status=Cancelled&startDate=${startDate}&endDate=${endDate}&orderBy=Date&direction=DESC&page=${page}&size=${size}`
 
             try {
                 const authString = `${api_key}:${api_secret}`;
@@ -1009,21 +1009,29 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
                     })
                 }
 
-                // DUMMY DATA FOR TESTING (Step 416 Request)
-                mappedRows.push({
-                    'orderNumber': '12933331383',
-                    'status': 'Cancelled',
-                    'productName': 'Test Ürünü (Arşivde Var)',
-                    'barcode': 'DUMMY_ARCHIVE_MATCH',
-                    'quantity': 1,
-                    'customer': 'Test Müşteri',
-                    'cargoTrackingNumber': '1234567890',
-                    'orderDate': Date.now() - 86400000,
-                    'statusDate': Date.now(),
-                    'reason': 'Test Reason'
-                });
+                // DUMMY DATA FOR TESTING (Step 416 Request) - Only add on first page
+                if (page === 0) {
+                    mappedRows.push({
+                        'orderNumber': '12933331383',
+                        'status': 'Cancelled',
+                        'productName': 'Test Ürünü (Arşivde Var)',
+                        'barcode': 'DUMMY_ARCHIVE_MATCH',
+                        'quantity': 1,
+                        'customer': 'Test Müşteri',
+                        'cargoTrackingNumber': '1234567890',
+                        'orderDate': Date.now() - 86400000,
+                        'statusDate': Date.now(),
+                        'reason': 'Test Reason'
+                    });
+                }
 
-                resolve({ success: true, data: mappedRows })
+                resolve({
+                    success: true,
+                    data: mappedRows,
+                    total: data.totalElements || 0,
+                    page: data.page || page,
+                    size: data.size || size
+                })
 
             } catch (error) {
                 resolve({ success: false, message: 'Fetch error: ' + error.message })

@@ -590,6 +590,23 @@
                                         </svg>
                                     </button>
                                 </div>
+                                <div class="relative ml-2">
+                                    <button id="btn-toggle-archive-cols"
+                                        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm">
+                                        <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 6h16M4 12h16M4 18h16" />
+                                        </svg>
+                                        <span>Sütunlar</span>
+                                    </button>
+                                    <div id="archive-cols-dropdown"
+                                        class="hidden absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                        <div class="py-1 max-h-60 overflow-y-auto" id="archive-cols-list">
+                                            <!-- Checkboxes here -->
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="hidden">
                                     <!-- Hidden Type Filter for JS compatibility -->
                                     <select id="archive-type-filter" class="hidden">
@@ -623,16 +640,12 @@
                                 <tr>
                                     <!-- Columns Removed: Tarih, Tür -->
                                     <th
-                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-40">
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-64">
                                         Veri
                                     </th>
                                     <th
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-auto">
                                         Detaylar
-                                    </th>
-                                    <th
-                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-24">
-                                        İşlem
                                     </th>
                                 </tr>
                             </thead>
@@ -658,24 +671,67 @@
                         <div class="flex items-center justify-between gap-4">
                             <h3 class="text-xs font-bold text-red-600 uppercase tracking-wider">İptaller Arşivi</h3>
                             <div class="flex items-center gap-3">
-                                <div class="flex items-center gap-2">
-                                    <label class="text-xs font-medium text-gray-500">Aralık:</label>
-                                    <select id="cancels-range-filter"
-                                        class="text-sm border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="today">Bugün</option>
-                                        <option value="last_3_days">Son 3 Gün</option>
-                                        <option value="last_week">Son 1 Hafta</option>
-                                        <option value="last_month">Son 1 Ay</option>
-                                    </select>
+                                <!-- Date Picker Button -->
+                                <div class="relative">
+                                    <button id="btn-cancels-date-picker" type="button"
+                                        class="w-full bg-white border border-gray-300 rounded-md shadow-sm px-3 py-1.5 inline-flex justify-between items-center text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+                                        <span id="cancels-date-picker-label">Tarih Seçiniz</span>
+                                        <svg class="ml-2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                    </button>
                                 </div>
-                                <button id="btn-fetch-trendyol-cancels"
-                                    class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors shadow-sm">
+
+                                <!-- Columns Button (with dropdown container) -->
+                                <div class="relative inline-block text-left">
+                                    <button type="button" id="btn-toggle-cancels-cols"
+                                        class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1.5 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+                                        <svg class="-ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 6h16M4 12h16M4 18h16" />
+                                        </svg>
+                                        <span>Sütunlar</span>
+                                    </button>
+                                    <div id="cancels-cols-dropdown"
+                                        class="hidden absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                        <div class="py-1 max-h-60 overflow-y-auto" id="cancels-cols-list">
+                                            <!-- Checkboxes here -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Refresh Button -->
+                                <button id="btn-refresh-cancels"
+                                    class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                     Yenile
                                 </button>
+
+                                <!-- Pagination Controls -->
+                                <div class="flex items-center gap-2 border-l border-gray-200 pl-2 ml-2">
+                                    <button id="btn-cancels-prev"
+                                        class="p-1.5 text-gray-500 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <span id="cancels-page-info"
+                                        class="text-xs text-gray-700 font-medium w-16 text-center">1 / 1</span>
+                                    <button id="btn-cancels-next"
+                                        class="p-1.5 text-gray-500 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

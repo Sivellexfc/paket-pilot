@@ -293,3 +293,8 @@ function openManualArchiveDatePicker(currentStart, currentEnd, onApplyCallback) 
 
     manualArchiveDatePicker.open();
 }
+
+// Expose to window for usage in other renderers
+window.openCustomDatePicker = function (callback, startDate, endDate) {
+    openManualArchiveDatePicker(startDate, endDate, callback);
+};

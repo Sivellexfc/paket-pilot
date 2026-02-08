@@ -4,6 +4,12 @@ const log = require('electron-log');
 // Global Date State for Archive
 let currentArchiveStartDate = new Date();
 let currentArchiveEndDate = new Date();
+// Global Date & Pagination State for Cancellations
+let currentCancelsStartDate = new Date();
+let currentCancelsEndDate = new Date();
+let currentCancelsPage = 0; // API uses 0-based index
+const cancelsPageSize = 50;
+let totalCancelsElements = 0;
 // Format helper: YYYY-MM-DD
 const formatDateForSQL = (date) => {
     const d = new Date(date);
@@ -441,6 +447,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadArchiveFromDate(selectedDate);
             } else {
                 showAlert('Lütfen bir tarih seçiniz.', 'warning');
+            }
+        });
+    }
+
+    // ===== CANCELS ARCHIVE LISTENERS =====
+    const btnCancelsDatePicker = document.getElementById('btn-cancels-date-picker');
+    if (btnCancelsDatePicker) {
+        btnCancelsDatePicker.addEventListener('click', openCancelsArchiveDatePicker);
+    }
+    const btnRefreshCancels = document.getElementById('btn-refresh-cancels');
+    if (btnRefreshCancels) {
+        btnRefreshCancels.addEventListener('click', () => loadTrendyolCancels());
+    }
+    const btnCancelsPrev = document.getElementById('btn-cancels-prev');
+    if (btnCancelsPrev) {
+        btnCancelsPrev.addEventListener('click', () => changeCancelsPage(-1));
+    }
+    const btnCancelsNext = document.getElementById('btn-cancels-next');
+    if (btnCancelsNext) {
+        btnCancelsNext.addEventListener('click', () => changeCancelsPage(1));
+    }
+    const btnCancelsCols = document.getElementById('btn-toggle-cancels-cols');
+    const cancelsColsDropdown = document.getElementById('cancels-cols-dropdown');
+    if (btnCancelsCols && cancelsColsDropdown) {
+        btnCancelsCols.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelsColsDropdown.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!btnCancelsCols.contains(e.target) && !cancelsColsDropdown.contains(e.target)) {
+                cancelsColsDropdown.classList.add('hidden');
             }
         });
     }
@@ -1458,8 +1495,6 @@ function loadArchivePage() {
 
     // Calculate Range from Global State
     const listContainer = document.getElementById('archive-list-container');
-    // typeInput is likely needed if the filtering logic below uses it. 
-    // And assume typeInput exists (hidden input in HTML)
     const typeInput = document.getElementById('archive-type-filter');
 
     if (!listContainer) return;
@@ -1491,7 +1526,14 @@ function loadArchivePage() {
         type
     }).then(rows => {
         // Filter out cancels if logic requires (though user might want to see them if selected 'all')
-        if (typeInput.value === 'cargo') rows = rows.filter(r => r.type === 'cargo');
+        if (typeInput && typeInput.value === 'cargo') rows = rows.filter(r => r.type === 'cargo');
+
+        // Setup Columns Menu (using first valid data row)
+        // Check rows for data
+        const sampleRow = rows.find(r => r.data && Array.isArray(r.data) && r.data.length > 0);
+        if (sampleRow) {
+            setupArchiveColumnsMenu(sampleRow.data);
+        }
 
         log.info(`Archive range loaded: ${rows.length} entries`);
         if (rows.length === 0) {
@@ -1504,24 +1546,23 @@ function loadArchivePage() {
             // Data summary logic
             const rawCount = Array.isArray(row.data) ? row.data.length : 0;
             const dataSummary = rawCount > 0 ? `${rawCount - 1} kayıt (${row.entry_date})` : `Veri detayları... (${row.entry_date})`;
-            const typeLabel = row.type === 'cargo' ? 'Kargo' : (row.type === 'cancel' ? 'İptal' : row.type);
             const uniqueId = `archive-detail-${rowIndex}`;
 
             // Main row
             const tr = document.createElement('tr');
-            tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+            tr.className = 'border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors group';
+            // Use onclick attribute to ensure listener is attached
+            tr.onclick = function () { window.toggleArchiveRow(uniqueId, this); };
+
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dataSummary}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button class="expand-detail-btn text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded" data-target="${uniqueId}">
-                        <svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 transition-transform duration-200 text-gray-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
-                        Detayları Göster
-                    </button>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button class="text-red-600 hover:text-red-900 delete-daily-btn p-2 hover:bg-red-50 rounded" data-id="${row.id}">Sil</button>
+                        <span class="group-hover:text-blue-800">Detay</span>
+                    </div>
                 </td>
             `;
             listContainer.appendChild(tr);
@@ -1532,16 +1573,21 @@ function loadArchivePage() {
             detailTr.className = 'hidden bg-gray-50';
 
             const tableResult = renderArchiveDetailTable(row.data, row.id, row.type);
+
+            // Remove padding
             detailTr.innerHTML = `
-                <td colspan="3" style="padding: 0; border: none; position: sticky; left: 0; z-index: 5;">
-                    <div class="bg-white shadow-sm border-b border-gray-200 w-full">
-                        <div class="w-full relative px-4 pb-4">
-                            ${tableResult.html}
-                        </div>
+                <td colspan="2" class="p-0 border-none">
+                    <div class="w-full bg-white shadow-inner border-b border-gray-200">
+                         ${tableResult.html}
                     </div>
                 </td>
             `;
             listContainer.appendChild(detailTr);
+
+            // Call setup if exists (important for delete buttons inside detail table!)
+            if (tableResult.setup) {
+                setTimeout(() => tableResult.setup(), 0);
+            }
 
         }); // Close forEach
     }).catch(err => {
@@ -1612,16 +1658,20 @@ function loadManualArchivePage() {
                 detailTr.id = uniqueId;
                 detailTr.className = 'hidden bg-gray-50';
 
+
+
+
+
                 let innerHTML = `
                 <div class="p-4 bg-white m-2 rounded shadow-sm">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-100">
                         <tr>
-                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Ürün</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Paket</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Adet</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Saat</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold text-gray-700">İşlem</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Ürün</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Paket</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Adet</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Saat</th>
+                            <th class="px-3 py-2 text-center text-sm font-semibold text-gray-700 w-[100px]">İşlem</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -1632,15 +1682,17 @@ function loadManualArchivePage() {
                     const packageCount = item.package_count || 0;
                     const quantity = item.quantity || 0;
 
+                    const safeProd = productName.replace(/"/g, '&quot;');
+
                     innerHTML += `<tr>
-                    <td class="px-3 py-2 font-medium text-gray-900 text-base">${productName}</td>
-                    <td class="px-3 py-2 text-base">${packageCount}</td>
-                    <td class="px-3 py-2 text-base">${quantity}</td>
-                    <td class="px-3 py-2 text-gray-400 text-sm">${time}</td>
+                    <td class="px-3 py-2 font-medium text-gray-900 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${safeProd}">${productName}</td>
+                    <td class="px-3 py-2 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${packageCount}">${packageCount}</td>
+                    <td class="px-3 py-2 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${quantity}">${quantity}</td>
+                    <td class="px-3 py-2 text-gray-400 text-sm truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${time}">${time}</td>
                     <td class="px-3 py-2 text-center">
                         <button class="text-blue-600 hover:text-blue-900 edit-manual-row-btn p-1 rounded hover:bg-blue-50 mr-2" 
                             data-id="${item.id}" 
-                            data-product="${productName}" 
+                            data-product="${safeProd}" 
                             data-package="${packageCount}" 
                             data-quantity="${quantity}"
                             title="Düzenle">
@@ -1865,56 +1917,9 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
     });
 
     const tableId = `archive-table-${archiveId}`;
-    const dropdownId = `archive-cols-dropdown-${archiveId}`;
-    const menuButtonId = `menu-button-${archiveId}`;
-
     // --- 2. Build HTML ---
-    // Note: We use !important in inline styles to ensure browser respects initial state
 
     let tableHTML = `
-        <div class="mb-3 flex justify-between items-center relative">
-            <!-- Left Side: Columns Dropdown -->
-            <div class="relative inline-block text-left">
-                <button type="button" class="cols-toggle-btn inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1.5 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none" id="${menuButtonId}" aria-expanded="true" aria-haspopup="true">
-                    Columns
-                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-
-                <div id="${dropdownId}" class="hidden origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 max-h-64 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="${menuButtonId}">
-                    <div class="py-1" role="none">
-    `;
-
-    // Dropdown Checkboxes
-    orderedColumns.forEach((col, idx) => {
-        const checked = col.visible ? 'checked' : '';
-        tableHTML += `
-            <label class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 cursor-pointer select-none">
-                <input type="checkbox" class="col-visibility-checkbox form-checkbox h-3 w-3 text-blue-600 rounded mr-2" 
-                    data-col-idx="${idx}" ${checked}>
-                <span class="truncate">${col.text}</span>
-            </label>
-        `;
-    });
-
-    tableHTML += `
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Side: Save Button -->
-            <button class="save-archive-btn px-4 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" 
-                    data-archive-id="${archiveId}" 
-                    data-archive-type="${archiveType}"
-                    disabled>
-                <svg class="w-4 h-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                Değişiklikleri Kaydet
-            </button>
-        </div>
-        
         <div class="overflow-x-auto">
         <table id="${tableId}" class="min-w-full divide-y divide-gray-200 text-sm">
             <thead class="bg-gray-100">
@@ -1925,7 +1930,7 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
     orderedColumns.forEach((col, idx) => {
         // Crucial: Default hidden with !important if !visible
         const style = col.visible ? '' : 'display: none !important;';
-        tableHTML += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider col-cell-${idx}" style="${style}">${col.text}</th>`;
+        tableHTML += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider col-cell-original-${col.originalIndex} w-[150px]" style="${style}">${col.text}</th>`;
     });
 
     // Add Action Column Header
@@ -1946,9 +1951,15 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
             } else {
                 let displayVal = cellValue;
                 if (typeof cellValue === 'string' && cellValue.toLowerCase().trim() === 'kargoya verildi') {
-                    displayVal = `<span class="text-blue-600 font-bold">${cellValue}</span>`;
+                    displayVal = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        <svg class="mr-1.5 h-2 w-2 text-green-400" fill="currentColor" viewBox="0 0 8 8">
+                            <circle cx="4" cy="4" r="3" />
+                        </svg>
+                        ${cellValue}
+                    </span>`;
                 }
-                tableHTML += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap col-cell-${idx}" style="${style}">${displayVal}</td>`;
+                const titleVal = typeof cellValue === 'string' ? cellValue.replace(/"/g, '&quot;') : cellValue;
+                tableHTML += `<td class="px-4 py-2 text-sm text-gray-900 truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors col-cell-original-${col.originalIndex}" style="${style}" ondblclick="toggleCellExpand(this)" title="${titleVal}">${displayVal}</td>`;
             }
         });
 
@@ -1997,36 +2008,7 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
             });
         });
 
-        const dropdownBtn = document.getElementById(menuButtonId);
-        const dropdownMenu = document.getElementById(dropdownId);
 
-        if (dropdownBtn && dropdownMenu) {
-            // Toggle
-            dropdownBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.toggle('hidden');
-            });
-
-            // Close outside
-            document.addEventListener('click', (e) => {
-                if (!dropdownBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                    dropdownMenu.classList.add('hidden');
-                }
-            });
-
-            // Visibility Toggle
-            dropdownMenu.querySelectorAll('.col-visibility-checkbox').forEach(cb => {
-                cb.addEventListener('change', (e) => {
-                    const colIdx = e.target.getAttribute('data-col-idx');
-                    const isChecked = e.target.checked;
-
-                    const cells = table.querySelectorAll(`.col-cell-${colIdx}`);
-                    cells.forEach(cell => {
-                        cell.style.display = isChecked ? '' : 'none';
-                    });
-                });
-            });
-        }
 
         // --- Edit Logic ---
         const tableData = JSON.parse(JSON.stringify(data));
@@ -4129,10 +4111,7 @@ if (btnCloseFilterInfo) {
 
 // --- TRENDYOL CANCELS LOGIC ---
 
-const btnFetchTrendyolCancels = document.getElementById('btn-fetch-trendyol-cancels');
-if (btnFetchTrendyolCancels) {
-    btnFetchTrendyolCancels.addEventListener('click', () => loadTrendyolCancels());
-}
+// --- TRENDYOL CANCELS LOGIC (Paginated & Advanced) ---
 
 async function loadTrendyolCancels() {
     if (!currentStore) {
@@ -4141,91 +4120,84 @@ async function loadTrendyolCancels() {
     }
 
     const listContainer = document.getElementById('cancels-archive-list-container');
-    const rangeSelect = document.getElementById('cancels-range-filter');
-    if (!listContainer || !rangeSelect) return;
+    const dateLabel = document.getElementById('cancels-date-picker-label');
 
-    // 1. Calculate Date Range
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    let startDate = todayStr;
-    const endDate = todayStr;
+    if (!listContainer) return;
 
-    const d = new Date();
-    switch (rangeSelect.value) {
-        case 'last_3_days': d.setDate(today.getDate() - 3); startDate = d.toISOString().split('T')[0]; break;
-        case 'last_week': d.setDate(today.getDate() - 7); startDate = d.toISOString().split('T')[0]; break;
-        case 'last_month': d.setDate(today.getDate() - 30); startDate = d.toISOString().split('T')[0]; break;
-        default: break; // today
+    // UI Update for Date
+    const sDate = formatDateForSQL(currentCancelsStartDate);
+    const eDate = formatDateForSQL(currentCancelsEndDate);
+    if (dateLabel) {
+        if (sDate === eDate) {
+            dateLabel.textContent = sDate.split('-').reverse().join('.');
+        } else {
+            dateLabel.textContent = `${sDate.split('-').reverse().join('.')} - ${eDate.split('-').reverse().join('.')}`;
+        }
     }
 
-    // UI Loading
-    listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Trendyol verileri çekiliyor...</td></tr>';
+    listContainer.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">Trendyol verileri çekiliyor...</td></tr>';
 
     const { ipcRenderer } = require('electron');
 
     try {
-        // 2. Fetch Trendyol Cancels
-        const startTs = new Date(startDate).setHours(0, 0, 0, 0);
-        const endTs = new Date(endDate).setHours(23, 59, 59, 999);
+        // 1. Fetch Trendyol Cancels (Paginated)
+        // Use timestamps (ms) for API as per main.js implementation
+        const startTs = new Date(currentCancelsStartDate).setHours(0, 0, 0, 0);
+        const endTs = new Date(currentCancelsEndDate).setHours(23, 59, 59, 999);
 
         const apiRes = await ipcRenderer.invoke('fetch-trendyol-cancelled', {
             storeId: currentStore.id,
             startDate: startTs,
-            endDate: endTs
+            endDate: endTs,
+            page: currentCancelsPage,
+            size: cancelsPageSize
         });
 
         if (!apiRes.success) {
             showAlert('Hata: ' + apiRes.message, 'error');
-            listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Veri çekilemedi.</td></tr>';
+            listContainer.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-sm text-red-500">Veri çekilemedi.</td></tr>';
             return;
         }
 
-        const trendyolCancels = apiRes.data; // Array of {orderNumber, ...}
+        const trendyolCancels = apiRes.data || [];
+        const total = apiRes.total || 0;
+
+        // Update Pagination UI
+        updateCancelsPaginationUI(currentCancelsPage, total, cancelsPageSize);
 
         if (trendyolCancels.length === 0) {
-            listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">İptal edilen sipariş bulunamadı.</td></tr>';
+            listContainer.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">İptal edilen sipariş bulunamadı.</td></tr>';
             return;
         }
 
-        // 3. Fetch Local Data for Comparison
-        // FIX: Search explicitly from a wide range (past 1 year) to ensure we find the cargo entry 
-        // even if it was shipped days/weeks ago.
+        // 2. Fetch Local Data for Comparison (Keep Logic)
         const pastDate = new Date();
-        pastDate.setFullYear(pastDate.getFullYear() - 1); // 1 year ago
+        pastDate.setFullYear(pastDate.getFullYear() - 1);
         const wideStartDate = pastDate.toISOString().split('T')[0];
 
         const localEntries = await ipcRenderer.invoke('param-get-daily-entries-range', {
             storeId: currentStore.id,
-            startDate: wideStartDate, // Use wide range for comparison
-            endDate,
+            startDate: wideStartDate,
+            endDate: eDate,
             type: 'all'
         });
 
-        // Build Sets
-        const cargoMap = new Map(); // OrderNo -> FullEntry (for update)
-        const cancelMap = new Map(); // OrderNo -> FullEntry (for delete)
+        // 3. Build Sets (Keep Logic)
+        const cargoMap = new Map();
+        const cancelMap = new Map();
 
         localEntries.forEach(entry => {
             const rows = entry.data || [];
             if (rows.length < 2) return;
             const headers = rows[0];
-            // Enhanced Column Detection
             const orderIdx = headers.findIndex(h => h && (
                 h.toString().toLowerCase().trim() === 'sipariş no' ||
                 h.toString().toLowerCase().includes('sipariş no') ||
                 h.toString().toLowerCase().includes('sipariş numara') ||
                 h.toString().toLowerCase().includes('sipariş numarası') ||
-                h.toString().toLowerCase().includes('siparis no') || // Covering generic cases
+                h.toString().toLowerCase().includes('siparis no') ||
                 h.toString().toLowerCase().trim() === 'barkod'
             ));
-
-            // Console Debugging
-            if (headers.some(h => h.toString().includes('Sipariş No'))) {
-                console.log('Found a header with Sipariş No:', headers);
-                console.log('Calculated OrderIdx:', orderIdx);
-            }
-
-            log.info(`Checking Entry ID: ${entry.id}, Headers: ${headers.join(', ')}, OrderIdx: ${orderIdx}`);
 
             if (orderIdx === -1) return;
 
@@ -4233,7 +4205,6 @@ async function loadTrendyolCancels() {
                 const orderNo = rows[i][orderIdx];
                 if (orderNo) {
                     const sOrder = String(orderNo).trim();
-                    console.log('Archive Order Found:', sOrder, 'Type:', entry.type); // DEBUG
                     if (entry.type === 'cargo') {
                         cargoMap.set(sOrder, entry);
                     } else if (entry.type === 'cancel') {
@@ -4243,43 +4214,33 @@ async function loadTrendyolCancels() {
             }
         });
 
-        console.log('--- DEBUG MAPS ---');
-        console.log('Cancel Map Keys:', Array.from(cancelMap.keys()));
-        console.log('Target Dummy Order:', '12933331383');
-        console.log('In Map?', cancelMap.has('12933331383'));
-        console.log('------------------');
-
-        log.info(`Cargo Map Size: ${cargoMap.size}, Cancel Map Size: ${cancelMap.size}`);
-
-        // 4. Render
+        // 4. Render Rows (Enhanced with ColIdx)
         listContainer.innerHTML = '';
+
+        // Initialize Columns Menu
+        setupCancelsColumnsMenu();
 
         trendyolCancels.forEach(item => {
             const orderNo = String(item.orderNumber).trim();
             let status = 'İptal';
             let statusColor = 'text-red-600 bg-red-100';
             let actionHtml = '';
-            let entryJson = '';
 
-            // Check match (Reverted forced check)
+            // Comparison Logic
             if (cargoMap.has(orderNo)) {
                 status = 'Kargoya Verilen İptal';
                 statusColor = 'text-orange-700 bg-orange-100';
-
-                // Use existing entry if found, otherwise mock one for the dummy
                 const entry = cargoMap.get(orderNo);
-
                 actionHtml = `
                     <label class="flex items-center space-x-1 cursor-pointer" title="İade Al">
                         <input type="checkbox" class="form-checkbox h-4 w-4 text-orange-600 return-confirm-cb" 
                             data-order="${orderNo}" data-entry-id="${entry.id}">
                         <span class="text-xs text-gray-600">İade</span>
                     </label>
-                 `;
+                `;
             } else if (cancelMap.has(orderNo)) {
                 status = 'Hazırlanırken İptal';
                 statusColor = 'text-gray-600 bg-gray-100';
-
                 const entry = cancelMap.get(orderNo);
                 actionHtml = `
                     <label class="flex items-center space-x-1 cursor-pointer" title="Listeden Sil">
@@ -4292,46 +4253,47 @@ async function loadTrendyolCancels() {
 
             const tr = document.createElement('tr');
             tr.className = 'border-b border-gray-100 hover:bg-gray-50';
-            // Helper for short date format (dd.mm.yy HH:MM)
-            const formatDate = (d) => d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
 
-            // Truncate product name
+            const formatDate = (d) => d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
             const productName = item.productName || '-';
-            const shortProductName = productName.length > 12 ? productName.slice(0, 12) + '...' : productName;
+            const shortProductName = productName.length > 30 ? productName.slice(0, 30) + '...' : productName;
 
             tr.innerHTML = `
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatDate(item.orderDate)}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatDate(item.statusDate)}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 overflow-hidden text-ellipsis max-w-[150px]" title="${item.customer}">${item.customer || '-'}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">${item.cargoTrackingNumber || '-'}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">${orderNo}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 col-idx-0">${formatDate(item.orderDate)}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 col-idx-1">${formatDate(item.statusDate)}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 col-idx-2" title="${item.customer}">${item.customer || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono col-idx-3">${item.cargoTrackingNumber || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono col-idx-4">${orderNo}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium col-idx-5">
                     <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColor}">${status}</span>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500" title="${productName}">
-                    <div>${shortProductName}</div>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 col-idx-6" title="${productName}">
+                    <div>${shortProductName} <span class="text-xs text-gray-400">(${item.quantity})</span></div>
+                    <div class="text-xs text-red-400">${item.reason || ''}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-right">
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-right col-idx-7">
                     ${actionHtml}
                 </td>
-             `;
+            `;
             listContainer.appendChild(tr);
         });
 
-        // 5. Attach Listeners
+        // Re-apply column visibility
+        applyCancelsColumnVisibility();
+
+        // 5. Attach Listeners for Action Buttons (Copied logic)
         document.querySelectorAll('.return-confirm-cb').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 if (e.target.checked) {
-                    e.target.checked = false; // Reset visually immediately
+                    e.target.checked = false;
                     const orderNo = e.target.getAttribute('data-order');
                     const entryId = e.target.getAttribute('data-entry-id');
-
                     showConfirmModal(
                         'İade Onayı',
                         'Bu ürünü kargodan geri teslim aldığınızı onaylıyor musunuz? Onaylarsanız kargo arşivinden silinecektir.',
                         async () => {
                             await deleteOrderFromEntry(entryId, orderNo);
-                            loadTrendyolCancels(); // Refresh
+                            loadTrendyolCancels();
                         }
                     );
                 }
@@ -4344,13 +4306,12 @@ async function loadTrendyolCancels() {
                     e.target.checked = false;
                     const orderNo = e.target.getAttribute('data-order');
                     const entryId = e.target.getAttribute('data-entry-id');
-
                     showConfirmModal(
                         'İptal Onayı',
                         'Bu siparişin iptal işlemini (hazırlanırken iptal) onaylıyor musunuz? Onaylarsanız kargoya vermediğinizi doğrularsınız.',
                         async () => {
                             await deleteOrderFromEntry(entryId, orderNo);
-                            loadTrendyolCancels(); // Refresh
+                            loadTrendyolCancels();
                         }
                     );
                 }
@@ -4358,8 +4319,8 @@ async function loadTrendyolCancels() {
         });
 
     } catch (err) {
-        log.error(err);
-        listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Hata: ' + err.message + '</td></tr>';
+        console.error('Trendyol Cancels Load Error:', err);
+        listContainer.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-sm text-red-500">Hata: ' + err.message + '</td></tr>';
     }
 }
 
@@ -4679,4 +4640,252 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupDatePickerButton);
 } else {
     setupDatePickerButton();
+}
+
+// Global Toggle Function for Table Cells
+window.toggleCellExpand = function (cell) {
+    if (cell.classList.contains('truncate')) {
+        cell.classList.remove('truncate');
+        cell.classList.add('whitespace-normal', 'break-words');
+        cell.style.maxWidth = 'none';
+    } else {
+        cell.classList.add('truncate');
+        cell.classList.remove('whitespace-normal', 'break-words');
+        cell.style.maxWidth = '12ch';
+    }
+};
+
+// Setup Archive Columns Menu
+function setupArchiveColumnsMenu(data) {
+    const list = document.getElementById('archive-cols-list');
+    const btn = document.getElementById('btn-toggle-archive-cols');
+    const dropdown = document.getElementById('archive-cols-dropdown');
+
+    if (!list || !btn || !dropdown) return;
+    if (!Array.isArray(data) || data.length === 0) return;
+
+    // Headers are in data[0]
+    const headers = data[0];
+    // Clear list
+    list.innerHTML = '';
+
+    headers.forEach((h, idx) => {
+        if (!h) return;
+        const label = document.createElement('label');
+        label.className = 'flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer select-none';
+
+        let displayH = h;
+        if (h.length > 25) displayH = h.substring(0, 22) + '...';
+
+        label.innerHTML = `
+            <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out mr-2 archive-col-checkbox" 
+                   data-col-idx="${idx}" checked>
+            <span class="text-sm text-gray-700" title="${h}">${displayH}</span>
+        `;
+
+        const checkbox = label.querySelector('input');
+        checkbox.addEventListener('change', (e) => {
+            const isVisible = e.target.checked;
+            const targetIdx = e.target.getAttribute('data-col-idx');
+
+            // Header cells
+            const thCells = document.querySelectorAll(`th.col-cell-original-${targetIdx}`);
+            thCells.forEach(cell => {
+                if (isVisible) {
+                    cell.style.removeProperty('display');
+                } else {
+                    cell.style.setProperty('display', 'none', 'important');
+                }
+            });
+
+            // Data cells
+            const tdCells = document.querySelectorAll(`td.col-cell-original-${targetIdx}`);
+            tdCells.forEach(cell => {
+                if (isVisible) {
+                    cell.style.removeProperty('display');
+                } else {
+                    cell.style.setProperty('display', 'none', 'important');
+                }
+            });
+        });
+
+        list.appendChild(label);
+    });
+
+    // Toggle Dropdown logic
+    // Clone button to remove old listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.onclick = (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('hidden');
+    };
+
+    // Document click (once)
+    if (!window.archiveColsDocListener) {
+        window.archiveColsDocListener = true;
+        document.addEventListener('click', (e) => {
+            const d = document.getElementById('archive-cols-dropdown');
+            const b = document.getElementById('btn-toggle-archive-cols');
+            if (d && b && !b.contains(e.target) && !d.contains(e.target) && !d.classList.contains('hidden')) {
+                d.classList.add('hidden');
+            }
+        });
+    }
+}
+
+// Global Toggle for Archive Row
+window.toggleArchiveRow = function (rowId, rowElement) {
+    const detailRow = document.getElementById(rowId);
+    if (!detailRow) return;
+
+    // Toggle Visibility
+    const isHidden = detailRow.classList.contains('hidden');
+    // Also toggle colspan td inside detailRow if needed? No, standard logic.
+
+    if (isHidden) {
+        detailRow.classList.remove('hidden');
+        rowElement.classList.add('bg-blue-50'); // Highlight active row slightly
+    } else {
+        detailRow.classList.add('hidden');
+        rowElement.classList.remove('bg-blue-50');
+    }
+
+    // Rotate Icon
+    const svgIcon = rowElement.querySelector('svg');
+    if (svgIcon) {
+        if (isHidden) { // Now visible
+            svgIcon.classList.add('rotate-180', 'text-blue-600');
+            svgIcon.classList.remove('text-gray-400');
+        } else {
+            svgIcon.classList.add('text-gray-400');
+        }
+    }
+};
+
+// --- Helper Functions for Cancels Archive ---
+
+// Open Date Picker for Cancels
+function openCancelsArchiveDatePicker() {
+    if (window.openCustomDatePicker) {
+        window.openCustomDatePicker((start, end) => {
+            currentCancelsStartDate = new Date(start);
+            currentCancelsEndDate = new Date(end);
+            currentCancelsPage = 0; // Reset to page 0
+            loadTrendyolCancels();
+        }, currentCancelsStartDate, currentCancelsEndDate);
+    } else {
+        console.error('Custom Date Picker Not Found');
+    }
+}
+
+// Change Page for Cancels
+function changeCancelsPage(delta) {
+    const totalPages = Math.ceil(totalCancelsElements / cancelsPageSize);
+    const newPage = currentCancelsPage + delta;
+    if (newPage >= 0 && newPage < totalPages) {
+        currentCancelsPage = newPage;
+        loadTrendyolCancels();
+    }
+}
+
+// Update Pagination UI
+function updateCancelsPaginationUI(page, totalCount, size) {
+    totalCancelsElements = totalCount;
+    const totalPages = Math.ceil(totalCount / size) || 1;
+    currentCancelsPage = page;
+
+    // Convert 0-based page to 1-based for display
+    const displayPage = currentCancelsPage + 1;
+
+    const infoSpan = document.getElementById('cancels-page-info');
+    const prevBtn = document.getElementById('btn-cancels-prev');
+    const nextBtn = document.getElementById('btn-cancels-next');
+
+    if (infoSpan) infoSpan.textContent = `${displayPage} / ${totalPages}`;
+
+    if (prevBtn) {
+        prevBtn.disabled = currentCancelsPage <= 0;
+        if (prevBtn.disabled) prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        else prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    if (nextBtn) {
+        nextBtn.disabled = displayPage >= totalPages;
+        if (nextBtn.disabled) nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        else nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+// Setup Cancellations Columns Menu
+let cancelsColumnState = {}; // Index -> boolean
+
+function setupCancelsColumnsMenu() {
+    const dropdownList = document.getElementById('cancels-cols-list');
+    if (!dropdownList) return;
+
+    // Headers are static in HTML for this view.
+    // 0: Sipariş Tarihi, 1: İptal Tarihi, 2: Müşteri, 3: Kargo No, 4: Sipariş No, 5: Durum, 6: Ürün, 7: İşlem
+    const headers = [
+        'Sipariş Tarihi', 'İptal Tarihi', 'Müşteri', 'Kargo No',
+        'Sipariş No', 'Durum', 'Ürün', 'İşlem'
+    ];
+
+    // Only init logic if empty
+    if (dropdownList.children.length > 0) return;
+
+    dropdownList.innerHTML = '';
+
+    headers.forEach((h, idx) => {
+        // Default visible
+        const isVisible = cancelsColumnState[idx] !== false;
+
+        const label = document.createElement('label');
+        label.className = 'flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 cursor-pointer select-none';
+        label.innerHTML = `
+            <input type="checkbox" class="col-visibility-checkbox form-checkbox h-3 w-3 text-blue-600 rounded mr-2" 
+                data-col-idx="${idx}" ${isVisible ? 'checked' : ''}>
+            <span class="truncate">${h}</span>
+        `;
+
+        const checkbox = label.querySelector('input');
+        checkbox.addEventListener('change', (e) => {
+            const targetIdx = parseInt(e.target.getAttribute('data-col-idx'));
+            cancelsColumnState[targetIdx] = e.target.checked;
+            applyCancelsColumnVisibility();
+        });
+
+        dropdownList.appendChild(label);
+    });
+}
+
+function applyCancelsColumnVisibility() {
+    // Apply state to all Rows including Headers
+    // Headers need to be targeted by nth-child since they don't have dynamic classes easily injected unless we did so.
+    // But table headers are static in index.html. We should add classes to them via JS or use nth-child.
+    // Let's use nth-child.
+
+    // Target Container
+    const table = document.querySelector('#view-cancels-archive table');
+    if (!table) return;
+
+    // Iterate all columns
+    for (let i = 0; i < 8; i++) {
+        const isVisible = cancelsColumnState[i] !== false;
+
+        // Find TH (nth-child is 1-based)
+        const th = table.querySelector(`thead th:nth-child(${i + 1})`);
+        if (th) {
+            if (isVisible) th.style.removeProperty('display');
+            else th.style.display = 'none';
+        }
+
+        // Find TDs
+        const tds = table.querySelectorAll(`tbody tr td:nth-child(${i + 1})`);
+        tds.forEach(td => {
+            if (isVisible) td.style.removeProperty('display');
+            else td.style.display = 'none';
+        });
+    }
 }
