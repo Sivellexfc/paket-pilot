@@ -818,6 +818,7 @@ function createSelectorWindow() {
     selectorWindow = new BrowserWindow({
         width: 1000,
         height: 700,
+        resizable: false,
         title: 'Mağaza Seçimi - PaketPilot',
         webPreferences: {
             nodeIntegration: true,
@@ -1039,6 +1040,48 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
         })
     })
 })
+
+ipcMain.handle("param-get-daily-entries-range-paginated", async (event, { storeId, startDate, endDate, type, page, pageSize }) => {
+    return new Promise((resolve, reject) => {
+        // Assuming page is 0-indexed
+        const offset = page * pageSize;
+
+        let baseQuery = "FROM daily_entries WHERE entry_date >= ? AND entry_date <= ?";
+        let params = [startDate, endDate];
+
+        if (storeId) {
+            baseQuery += " AND store_id = ?";
+            params.push(storeId);
+        }
+
+        if (type && type !== 'all') {
+            baseQuery += " AND type = ?";
+            params.push(type);
+        }
+
+        const countQuery = "SELECT COUNT(*) as count " + baseQuery;
+
+        db.get(countQuery, params, (err, countRow) => {
+            if (err) return reject(err);
+
+            const total = countRow ? countRow.count : 0;
+
+            let dataQuery = "SELECT * " + baseQuery + " ORDER BY entry_date DESC, id DESC LIMIT ? OFFSET ?";
+            const dataParams = [...params, pageSize, offset];
+
+            db.all(dataQuery, dataParams, (err, rows) => {
+                if (err) reject(err);
+                else {
+                    const parsed = rows.map(r => {
+                        try { return { ...r, data: JSON.parse(r.data) }; }
+                        catch (e) { return { ...r, data: [] }; }
+                    });
+                    resolve({ data: parsed, total, page, pageSize });
+                }
+            });
+        });
+    });
+});
 
 ipcMain.handle("get-entry-by-id", async (event, id) => {
     return new Promise((resolve, reject) => {

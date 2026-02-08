@@ -14,6 +14,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const manualCargoModalBackdrop = document.getElementById('manual-cargo-modal-backdrop-v2');
 
     if (btnManualCargoAdd) {
+        // Check Visibility when store is loaded
+        const storeVisibilityCheck = setInterval(() => {
+            if (typeof currentStore !== 'undefined' && currentStore) {
+                const isTrendyol = (currentStore.store_type || 'website').toLowerCase() === 'trendyol';
+                if (isTrendyol) {
+                    btnManualCargoAdd.classList.add('hidden');
+                } else {
+                    btnManualCargoAdd.classList.remove('hidden');
+                }
+                clearInterval(storeVisibilityCheck); // Run once after store is found
+            }
+        }, 500);
+
         btnManualCargoAdd.addEventListener('click', () => {
             // currentStore renderer.js dosyasından gelmeli.
             // Eğer undefined ise, store seçilmemiş demektir.
@@ -78,23 +91,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const rows = manualCargoTableBody.querySelectorAll('tr');
             const entries = [];
+            let hasError = false;
+            let errorMessage = '';
 
-            rows.forEach(row => {
+            for (const row of rows) {
                 const productNameInput = row.querySelector('.manual-product-name');
                 const packageCountInput = row.querySelector('.manual-package-count');
                 const quantityInput = row.querySelector('.manual-quantity');
 
-                if (!productNameInput || !packageCountInput || !quantityInput) return;
+                if (!productNameInput || !packageCountInput || !quantityInput) continue;
+
+                // Reset Validations
+                productNameInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+                packageCountInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+                quantityInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
 
                 const productName = productNameInput.value.trim();
-                const packageCount = parseInt(packageCountInput.value) || 0;
-                const quantity = parseInt(quantityInput.value) || 0;
-                const barcode = ""; // Barkod kaldırıldı, boş gönderiyoruz
+                const packageCountStr = packageCountInput.value.trim();
+                const quantityStr = quantityInput.value.trim();
 
-                if (productName || packageCount > 0 || quantity > 0) {
-                    entries.push({ productName, packageCount, quantity, barcode });
+                // Skip completely empty rows
+                if (!productName && packageCountStr === '' && quantityStr === '') continue;
+
+                // Validate Product Name
+                if (!productName) {
+                    hasError = true;
+                    errorMessage = 'Ürün adı boş bırakılamaz.';
+                    productNameInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+                    break;
                 }
-            });
+
+                // Validate Package Count
+                if (packageCountStr === '') {
+                    hasError = true;
+                    errorMessage = 'Paket sayısı girilmelidir.';
+                    packageCountInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+                    break;
+                }
+
+                // Validate Quantity
+                if (quantityStr === '') {
+                    hasError = true;
+                    errorMessage = 'Adet sayısı girilmelidir.';
+                    quantityInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+                    break;
+                }
+
+                const packageCount = parseInt(packageCountStr);
+                const quantity = parseInt(quantityStr);
+                const barcode = "";
+
+                entries.push({ productName, packageCount, quantity, barcode });
+            }
+
+            if (hasError) {
+                showAlert(errorMessage, 'warning');
+                return;
+            }
 
             if (entries.length === 0) {
                 showAlert('Lütfen en az bir satır veri giriniz.', 'warning');

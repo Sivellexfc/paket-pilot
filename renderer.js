@@ -1640,13 +1640,15 @@ function loadManualArchivePage() {
                 const uniqueId = `manual-archive-${idx}`;
 
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+                tr.className = 'border-b border-gray-200 hover:bg-gray-50 cursor-pointer group';
+                tr.onclick = function () { toggleArchiveRow(uniqueId, this); };
+
                 tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dataSummary}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button class="expand-detail-btn text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded" data-target="${uniqueId}">
-                         <svg class="w-4 h-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg> Detay
-                    </button>
+                    <div class="text-blue-600 group-hover:text-blue-900 flex items-center gap-1 transition-colors">
+                         <svg class="w-4 h-4 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg> Detay
+                    </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                    <span class="text-xs text-gray-400">Manuel</span>
@@ -1656,16 +1658,16 @@ function loadManualArchivePage() {
 
                 const detailTr = document.createElement('tr');
                 detailTr.id = uniqueId;
-                detailTr.className = 'hidden bg-gray-50';
+                detailTr.className = 'hidden bg-white';
 
 
 
 
 
                 let innerHTML = `
-                <div class="p-4 bg-white m-2 rounded shadow-sm">
+                <div class="w-full">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100">
+                    <thead class="bg-white border-b border-gray-200">
                         <tr>
                             <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Ürün</th>
                             <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700 w-[150px]">Paket</th>
@@ -1685,9 +1687,9 @@ function loadManualArchivePage() {
                     const safeProd = productName.replace(/"/g, '&quot;');
 
                     innerHTML += `<tr>
-                    <td class="px-3 py-2 font-medium text-gray-900 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${safeProd}">${productName}</td>
-                    <td class="px-3 py-2 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${packageCount}">${packageCount}</td>
-                    <td class="px-3 py-2 text-base truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${quantity}">${quantity}</td>
+                    <td class="px-3 py-2 text-gray-900 text-sm truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${safeProd}">${productName}</td>
+                    <td class="px-3 py-2 text-sm truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${packageCount}">${packageCount}</td>
+                    <td class="px-3 py-2 text-sm truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${quantity}">${quantity}</td>
                     <td class="px-3 py-2 text-gray-400 text-sm truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors" ondblclick="toggleCellExpand(this)" title="${time}">${time}</td>
                     <td class="px-3 py-2 text-center">
                         <button class="text-blue-600 hover:text-blue-900 edit-manual-row-btn p-1 rounded hover:bg-blue-50 mr-2" 
@@ -4888,4 +4890,40 @@ function applyCancelsColumnVisibility() {
             else td.style.display = 'none';
         });
     }
+}
+
+// ==========================================
+// CONNECTION STATUS MONITOR
+// ==========================================
+function updateConnectionStatus() {
+    const dot = document.getElementById('connection-dot');
+    const text = document.getElementById('connection-text');
+    const container = document.getElementById('connection-status');
+
+    if (!dot || !text) return;
+
+    if (navigator.onLine) {
+        // Online State: Green Pulse
+        dot.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse transition-all duration-300';
+        text.textContent = 'Online';
+        text.className = 'text-[10px] font-medium text-green-600 select-none';
+        if (container) container.title = 'İnternet bağlantısı aktif';
+    } else {
+        // Offline State: Red Static
+        dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] transition-all duration-300';
+        text.textContent = 'Offline';
+        text.className = 'text-[10px] font-medium text-red-600 select-none';
+        if (container) container.title = 'İnternet bağlantısı yok';
+    }
+}
+
+// Global Event Listeners for Connection Status
+window.addEventListener('online', updateConnectionStatus);
+window.addEventListener('offline', updateConnectionStatus);
+
+// Initial check when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateConnectionStatus);
+} else {
+    updateConnectionStatus();
 }

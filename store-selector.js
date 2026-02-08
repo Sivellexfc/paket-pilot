@@ -237,7 +237,7 @@ async function renderStores() {
 
         const card = document.createElement('div');
 
-        let cardClasses = "relative group bg-white border rounded-xl p-4 flex items-center justify-between transition-all duration-200 ease-in-out";
+        let cardClasses = "relative group bg-white border rounded-xl p-3 flex items-center justify-between transition-all duration-200 ease-in-out";
 
         if (isOpened) {
             cardClasses += " border-green-200 bg-green-50 cursor-default opacity-90";
@@ -250,7 +250,7 @@ async function renderStores() {
         card.innerHTML = `
             <div class="flex items-center gap-4">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden border border-gray-100 bg-white">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden border border-gray-100 bg-white">
                         ${getStoreIcon(store.store_type)}
                     </div>
                 </div>
@@ -302,29 +302,48 @@ function renderManagementList() {
     manageStoreList.innerHTML = '';
 
     if (stores.length === 0) {
-        manageStoreList.innerHTML = '<li class="p-4 text-center text-gray-500 italic">Kayıtlı mağaza yok.</li>';
+        manageStoreList.innerHTML = `
+            <div class="flex flex-col items-center justify-center p-8 text-center h-full">
+                <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                </div>
+                <p class="text-sm text-gray-500 font-medium">Henüz kayıtlı mağaza yok.</p>
+                <p class="text-xs text-gray-400 mt-1">Sol taraftaki formu kullanarak yeni bir mağaza ekleyebilirsiniz.</p>
+            </div>`;
         return;
     }
 
     stores.forEach(store => {
         const li = document.createElement('li');
-        li.className = "px-4 py-3 flex items-center justify-between hover:bg-gray-50";
+        li.className = "grid grid-cols-12 gap-4 px-4 py-3 hover:bg-blue-50 transition-colors items-center group border-b border-gray-50 last:border-0";
+
+        // Generate icon
+        const iconHtml = getStoreIcon(store.store_type);
 
         li.innerHTML = `
-            <div class="flex-1 mr-4">
-                <input type="text" value="${store.name}" 
-                    class="store-name-input bg-transparent border-transparent hover:border-gray-300 focus:border-orange-500 rounded px-2 py-1 w-full text-sm text-gray-800 transition-colors"
-                    data-id="${store.id}"
-                >
+            <div class="col-span-8 md:col-span-9 flex items-center gap-3 overflow-hidden">
+                <div class="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 p-1 shadow-sm">
+                    ${iconHtml}
+                </div>
+                <div class="flex-1 min-w-0 mr-2">
+                    <input type="text" value="${store.name}" 
+                        class="store-name-input bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded px-2 py-1.5 w-full text-sm text-gray-700 font-medium transition-all"
+                        data-id="${store.id}"
+                        placeholder="Mağaza Adı"
+                    >
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <button class="btn-save-name hidden text-green-600 hover:text-green-800 p-1" title="Kaydet">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="col-span-4 md:col-span-3 flex justify-end items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                <button class="btn-save-name hidden text-green-600 hover:bg-green-50 p-1.5 rounded-md transition-colors" title="Kaydet">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
                 </button>
-                <button class="btn-delete-store text-red-400 hover:text-red-700 p-1" title="Sil" data-id="${store.id}">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="h-4 w-px bg-gray-200 mx-1"></div>
+                <button class="btn-delete-store text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Sil" data-id="${store.id}">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                 </button>
@@ -336,16 +355,15 @@ function renderManagementList() {
         const btnSave = li.querySelector('.btn-save-name');
 
         input.addEventListener('focus', () => {
-            input.classList.remove('border-transparent');
-            input.classList.add('border-gray-300', 'bg-white');
+            input.classList.remove('border-transparent', 'bg-transparent');
+            input.classList.add('bg-white');
         });
 
         input.addEventListener('blur', () => {
-            // Delay to allow click on save button
             setTimeout(() => {
                 if (document.activeElement !== btnSave) {
-                    input.classList.add('border-transparent');
-                    input.classList.remove('border-gray-300', 'bg-white');
+                    input.classList.add('border-transparent', 'bg-transparent');
+                    input.classList.remove('bg-white');
                     input.value = store.name; // Reset if not saved
                     btnSave.classList.add('hidden');
                 }
