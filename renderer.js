@@ -1,6 +1,18 @@
 const XLSX = require('xlsx');
 const log = require('electron-log');
 
+// Global Date State for Archive
+let currentArchiveStartDate = new Date();
+let currentArchiveEndDate = new Date();
+// Format helper: YYYY-MM-DD
+const formatDateForSQL = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 log.info('Bu mesaj hem dosyaya yazılır hem de konsola basılır');
 
 // State to store current imported data for each side
@@ -1444,52 +1456,24 @@ function loadArchivePage() {
         return loadManualArchivePage();
     }
 
+    // Calculate Range from Global State
     const listContainer = document.getElementById('archive-list-container');
-    const dateInput = document.getElementById('archive-date-filter');
+    // typeInput is likely needed if the filtering logic below uses it. 
+    // And assume typeInput exists (hidden input in HTML)
     const typeInput = document.getElementById('archive-type-filter');
-    const rangeSelect = document.getElementById('archive-range-filter');
 
-    if (!listContainer || !dateInput || !typeInput) return;
+    if (!listContainer) return;
 
-    // Calculate Range
-    const todayStr = new Date().toISOString().split('T')[0];
-    let startDate = todayStr;
-    let endDate = todayStr;
+    let startDate = formatDateForSQL(currentArchiveStartDate);
+    let endDate = formatDateForSQL(currentArchiveEndDate);
 
-    if (rangeSelect) {
-        const range = rangeSelect.value;
-        const d = new Date();
-
-        switch (range) {
-            case 'last_week':
-                d.setDate(d.getDate() - 7);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'last_2_weeks':
-                d.setDate(d.getDate() - 14);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'last_month':
-                d.setDate(d.getDate() - 30);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'today':
-                // Default
-                break;
-            case 'specific':
-                if (!dateInput.value) {
-                    showAlert('Lütfen bir tarih seçiniz.', 'warning');
-                    return;
-                }
-                startDate = dateInput.value;
-                endDate = dateInput.value;
-                break;
-        }
-    } else {
-        // Fallback for old UI if select missing
-        if (dateInput.value) {
-            startDate = dateInput.value;
-            endDate = dateInput.value;
+    // Update Button Label if needed (in case page reloaded)
+    const btnLabel = document.getElementById('manual-date-picker-label');
+    if (btnLabel) {
+        if (startDate === endDate) {
+            btnLabel.textContent = startDate.split('-').reverse().join('.');
+        } else {
+            btnLabel.textContent = `${startDate.split('-').reverse().join('.')} - ${endDate.split('-').reverse().join('.')}`;
         }
     }
 
@@ -1566,47 +1550,22 @@ function loadArchivePage() {
     });
 }
 
-// Load Manual Archive Page (For non-Trendyol stores)
 function loadManualArchivePage() {
     const listContainer = document.getElementById('archive-list-container');
-    const dateInput = document.getElementById('archive-date-filter');
-    const rangeSelect = document.getElementById('archive-range-filter');
-
     if (!listContainer) return;
 
-    // Calculate Range
-    const todayStr = new Date().toISOString().split('T')[0];
-    let startDate = todayStr;
-    let endDate = todayStr;
+    // Use Global State
+    let startDate = formatDateForSQL(currentArchiveStartDate);
+    let endDate = formatDateForSQL(currentArchiveEndDate);
 
-    if (rangeSelect) {
-        const range = rangeSelect.value;
-        const d = new Date();
-        switch (range) {
-            case 'last_week':
-                d.setDate(d.getDate() - 7);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'last_2_weeks':
-                d.setDate(d.getDate() - 14);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'last_month':
-                d.setDate(d.getDate() - 30);
-                startDate = d.toISOString().split('T')[0];
-                break;
-            case 'today':
-                break;
-            case 'specific':
-                if (dateInput && dateInput.value) {
-                    startDate = dateInput.value;
-                    endDate = dateInput.value;
-                }
-                break;
+    // Update Button Label
+    const btnLabel = document.getElementById('manual-date-picker-label');
+    if (btnLabel) {
+        if (startDate === endDate) {
+            btnLabel.textContent = startDate.split('-').reverse().join('.'); // DD.MM.YYYY
+        } else {
+            btnLabel.textContent = `${startDate.split('-').reverse().join('.')} - ${endDate.split('-').reverse().join('.')}`;
         }
-    } else if (dateInput && dateInput.value) {
-        startDate = dateInput.value;
-        endDate = dateInput.value;
     }
 
     listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Yükleniyor...</td></tr>';
@@ -1621,7 +1580,7 @@ function loadManualArchivePage() {
 
             // Group by Date
             const grouped = {};
-            rows.forEach(r => {
+            rows.forEach((r, idx) => {
                 const date = r.created_at ? r.created_at.split(' ')[0] : 'Tarihsiz';
                 if (!grouped[date]) grouped[date] = [];
                 grouped[date].push(r);
@@ -1631,7 +1590,7 @@ function loadManualArchivePage() {
 
             Object.keys(grouped).sort().reverse().forEach((date, idx) => {
                 const dayRows = grouped[date];
-                const dataSummary = `${dayRows.length} ürün girişi (${date})`;
+                const dataSummary = `${dayRows.length} kargo girişi (${date})`;
                 const uniqueId = `manual-archive-${idx}`;
 
                 const tr = document.createElement('tr');
@@ -1654,25 +1613,97 @@ function loadManualArchivePage() {
                 detailTr.className = 'hidden bg-gray-50';
 
                 let innerHTML = `
-                <div class="p-4 bg-white border m-4 rounded shadow-sm">
-                <table class="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead class="bg-gray-100"><tr><th class="px-2 py-1 text-left">Ürün</th><th class="px-2 py-1 text-left">Paket</th><th class="px-2 py-1 text-left">Adet</th><th class="px-2 py-1 text-left">Barkod</th><th class="px-2 py-1 text-left">Saat</th></tr></thead>
+                <div class="p-4 bg-white m-2 rounded shadow-sm">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Ürün</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Paket</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Adet</th>
+                            <th class="px-3 py-2 text-left text-sm font-semibold text-gray-700">Saat</th>
+                            <th class="px-3 py-2 text-center text-sm font-semibold text-gray-700">İşlem</th>
+                        </tr>
+                    </thead>
                     <tbody class="divide-y divide-gray-100">
             `;
                 dayRows.forEach(item => {
                     const time = item.created_at ? item.created_at.split(' ')[1] : '';
+                    const productName = item.product_name || '-';
+                    const packageCount = item.package_count || 0;
+                    const quantity = item.quantity || 0;
+
                     innerHTML += `<tr>
-                    <td class="px-2 py-1 font-medium text-gray-900">${item.product_name || '-'}</td>
-                    <td class="px-2 py-1">${item.package_count || 0}</td>
-                    <td class="px-2 py-1">${item.quantity || 0}</td>
-                    <td class="px-2 py-1 font-mono text-gray-600">${item.barcode || '-'}</td>
-                    <td class="px-2 py-1 text-gray-400">${time}</td>
+                    <td class="px-3 py-2 font-medium text-gray-900 text-base">${productName}</td>
+                    <td class="px-3 py-2 text-base">${packageCount}</td>
+                    <td class="px-3 py-2 text-base">${quantity}</td>
+                    <td class="px-3 py-2 text-gray-400 text-sm">${time}</td>
+                    <td class="px-3 py-2 text-center">
+                        <button class="text-blue-600 hover:text-blue-900 edit-manual-row-btn p-1 rounded hover:bg-blue-50 mr-2" 
+                            data-id="${item.id}" 
+                            data-product="${productName}" 
+                            data-package="${packageCount}" 
+                            data-quantity="${quantity}"
+                            title="Düzenle">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button class="text-red-600 hover:text-red-900 delete-manual-row-btn p-1 rounded hover:bg-red-50" 
+                            data-id="${item.id}" 
+                            title="Sil">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </td>
                 </tr>`;
                 });
                 innerHTML += `</tbody></table></div>`;
 
-                detailTr.innerHTML = `<td colspan="3" class="p-0 border-0">${innerHTML}</td>`;
+                detailTr.innerHTML = `<td colspan="3" class="p-0">${innerHTML}</td>`;
                 listContainer.appendChild(detailTr);
+            });
+
+            // Add Event Listeners for Edit and Delete
+            // Delete Logic
+            listContainer.querySelectorAll('.delete-manual-row-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = btn.getAttribute('data-id');
+                    showConfirm('Kaydı Sil', 'Bu kaydı silmek istediğinize emin misiniz?', async () => {
+                        try {
+                            const res = await ipcRenderer.invoke('db-delete-manual-cargo-entry', id);
+                            if (res.success) {
+                                showAlert('Kayıt başarıyla silindi.', 'success');
+                                loadManualArchivePage(); // Reload
+                            } else {
+                                showAlert('Silme işlemi başarısız.', 'error');
+                            }
+                        } catch (err) {
+                            console.error('Delete error', err);
+                            showAlert('Hata: ' + err.message, 'error');
+                        }
+                    });
+                });
+            });
+
+            // Edit Logic (Open Modal)
+            listContainer.querySelectorAll('.edit-manual-row-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = btn.getAttribute('data-id');
+                    const product = btn.getAttribute('data-product');
+                    const packageCount = btn.getAttribute('data-package');
+                    const quantity = btn.getAttribute('data-quantity');
+
+                    // Fill Modal
+                    document.getElementById('update-entry-id').value = id;
+                    document.getElementById('update-product-name').value = product;
+                    document.getElementById('update-package-count').value = packageCount;
+                    document.getElementById('update-quantity').value = quantity;
+
+                    // Show Modal
+                    const modal = document.getElementById('update-manual-modal');
+                    if (modal) modal.classList.remove('hidden');
+                });
             });
 
         })
@@ -4556,3 +4587,96 @@ function setupArchiveEventDelegation() {
 }
 
 
+// --- Setup Manual Update Modal Logic ---
+function setupManualUpdateModal() {
+    const modal = document.getElementById('update-manual-modal');
+    const btnSave = document.getElementById('btn-update-save');
+    const btnCancel = document.getElementById('btn-close-update-modal');
+    const backdrop = document.getElementById('update-manual-modal-backdrop');
+
+    if (!modal || !btnSave || !btnCancel) return;
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+    };
+
+    btnCancel.addEventListener('click', closeModal);
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+
+    btnSave.addEventListener('click', async () => {
+        const id = document.getElementById('update-entry-id').value;
+        const productName = document.getElementById('update-product-name').value;
+        const packageCount = parseInt(document.getElementById('update-package-count').value) || 0;
+        const quantity = parseInt(document.getElementById('update-quantity').value) || 0;
+
+        if (!productName) {
+            showAlert('Ürün adı boş olamaz.', 'warning');
+            return;
+        }
+
+        try {
+            const { ipcRenderer } = require('electron');
+            const res = await ipcRenderer.invoke('db-update-manual-cargo-entry', { id, productName, packageCount, quantity });
+            if (res.success) {
+                showAlert('Kayıt güncellendi.', 'success');
+                closeModal();
+                loadManualArchivePage(); // Reload list
+            } else {
+                showAlert('Güncelleme başarısız.', 'error');
+            }
+        } catch (err) {
+            console.error('Update error', err);
+            showAlert('Hata: ' + err.message, 'error');
+        }
+    });
+}
+// Init Modal Logic immediately as script loads (since DOM elements exist in HTML now)
+setupManualUpdateModal();
+
+// --- Setup Date Picker Button ---
+function setupDatePickerButton() {
+    const btn = document.getElementById('btn-manual-date-picker');
+    const label = document.getElementById('manual-date-picker-label');
+
+    if (btn) {
+        // Init label with default today
+        const todayStr = formatDateForSQL(new Date()).split('-').reverse().join('.');
+        if (label) label.textContent = todayStr;
+
+        btn.addEventListener('click', () => {
+            // Check if openManualArchiveDatePicker is available
+            if (typeof openManualArchiveDatePicker === 'function') {
+                // Open Picker
+                openManualArchiveDatePicker(currentArchiveStartDate, currentArchiveEndDate, (start, end) => {
+                    // On Apply
+                    currentArchiveStartDate = start;
+                    currentArchiveEndDate = end;
+
+                    // Update Label
+                    const s = formatDateForSQL(start).split('-').reverse().join('.');
+                    const e = formatDateForSQL(end).split('-').reverse().join('.');
+                    if (label) {
+                        label.textContent = (s === e) ? s : `${s} - ${e}`;
+                    }
+
+                    // Refresh View
+                    const isTrendyol = (currentStore && (currentStore.store_type || 'website').toLowerCase() === 'trendyol');
+                    if (isTrendyol) {
+                        if (typeof loadArchivePage === 'function') loadArchivePage();
+                    } else {
+                        if (typeof loadManualArchivePage === 'function') loadManualArchivePage();
+                    }
+                });
+            } else {
+                console.error('openManualArchiveDatePicker function not found. Ensure script is loaded.');
+            }
+        });
+    }
+}
+
+// Call setup
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupDatePickerButton);
+} else {
+    setupDatePickerButton();
+}

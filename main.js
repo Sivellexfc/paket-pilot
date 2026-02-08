@@ -532,6 +532,25 @@ ipcMain.handle('db-save-manual-cargo-entry', async (event, { storeId, entries })
     });
 })
 
+ipcMain.handle('db-delete-manual-cargo-entry', async (event, id) => {
+    return new Promise((resolve, reject) => {
+        db.run('DELETE FROM other_stores_cargo_info WHERE id = ?', [id], function (err) {
+            if (err) reject(err);
+            else resolve({ success: true, changes: this.changes });
+        });
+    });
+});
+
+ipcMain.handle('db-update-manual-cargo-entry', async (event, { id, productName, packageCount, quantity }) => {
+    return new Promise((resolve, reject) => {
+        db.run('UPDATE other_stores_cargo_info SET product_name = ?, package_count = ?, quantity = ? WHERE id = ?',
+            [productName, packageCount, quantity, id], function (err) {
+                if (err) reject(err);
+                else resolve({ success: true, changes: this.changes });
+            });
+    });
+})
+
 ipcMain.handle("db-delete-batch", async (event, batchId) => {
     return new Promise((resolve, reject) => {
         db.serialize(() => {

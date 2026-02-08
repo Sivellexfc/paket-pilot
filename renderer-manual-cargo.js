@@ -1,20 +1,24 @@
 
 // ==========================================
-// MANUAL CARGO ENTRY LOGIC
+// MANUAL CARGO ENTRY LOGIC V2
 // ==========================================
+const { ipcRenderer } = require('electron');
+
 document.addEventListener('DOMContentLoaded', () => {
-    const btnManualCargoAdd = document.getElementById('btn-manual-cargo-add');
-    const manualCargoModal = document.getElementById('manual-cargo-modal');
-    const btnCloseManualModal = document.getElementById('btn-close-manual-modal');
-    const btnSaveManualCargo = document.getElementById('btn-save-manual-cargo');
-    const btnAddManualRow = document.getElementById('btn-add-manual-row');
-    const manualCargoTableBody = document.getElementById('manual-cargo-table-body');
-    const manualCargoModalBackdrop = document.getElementById('manual-cargo-modal-backdrop');
+    const btnManualCargoAdd = document.getElementById('btn-manual-cargo-add-v2');
+    const manualCargoModal = document.getElementById('manual-cargo-modal-v2');
+    const btnCloseManualModal = document.getElementById('btn-close-manual-modal-v2');
+    const btnSaveManualCargo = document.getElementById('btn-save-manual-cargo-v2');
+    const btnAddManualRow = document.getElementById('btn-add-manual-row-v2');
+    const manualCargoTableBody = document.getElementById('manual-cargo-table-body-v2');
+    const manualCargoModalBackdrop = document.getElementById('manual-cargo-modal-backdrop-v2');
 
     if (btnManualCargoAdd) {
         btnManualCargoAdd.addEventListener('click', () => {
-            if (!currentStore) {
-                alert('Lütfen önce bir mağaza seçiniz.');
+            // currentStore renderer.js dosyasından gelmeli.
+            // Eğer undefined ise, store seçilmemiş demektir.
+            if (typeof currentStore === 'undefined' || !currentStore) {
+                showAlert('Lütfen önce bir mağaza seçiniz.', 'warning');
                 return;
             }
             // Clear existing rows
@@ -46,14 +50,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function addManualCargoRow() {
         if (!manualCargoTableBody) return;
         const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-50 transition-colors";
         tr.innerHTML = `
-            <td class="px-2 py-2"><input type="text" class="manual-product-name w-full border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Ürün Adı"></td>
-            <td class="px-2 py-2"><input type="number" class="manual-package-count w-full border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="0"></td>
-            <td class="px-2 py-2"><input type="number" class="manual-quantity w-full border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="0"></td>
-            <td class="px-2 py-2"><input type="text" class="manual-barcode w-full border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Barkod"></td>
-            <td class="px-2 py-2 text-center">
-                <button type="button" class="text-red-600 hover:text-red-800" onclick="this.closest('tr').remove()">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            <td class="px-2 py-2 align-middle">
+                <input type="text" class="manual-product-name w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-sm" placeholder="Ürün Adı Giriniz">
+            </td>
+            <td class="px-2 py-2 align-middle">
+                <input type="number" class="manual-package-count w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-sm" placeholder="0">
+            </td>
+            <td class="px-2 py-2 align-middle">
+                <input type="number" class="manual-quantity w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-sm" placeholder="0">
+            </td>
+            <td class="px-2 py-2 text-center align-middle whitespace-nowrap w-10">
+                <button type="button" class="group flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" onclick="this.closest('tr').remove()" title="Bu satırı sil">
+                    <svg class="w-4 h-4 transform group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                 </button>
             </td>
         `;
@@ -62,24 +74,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnSaveManualCargo) {
         btnSaveManualCargo.addEventListener('click', async () => {
-            if (!currentStore) return;
+            if (typeof currentStore === 'undefined' || !currentStore) return;
 
             const rows = manualCargoTableBody.querySelectorAll('tr');
             const entries = [];
 
             rows.forEach(row => {
-                const productName = row.querySelector('.manual-product-name').value.trim();
-                const packageCount = parseInt(row.querySelector('.manual-package-count').value) || 0;
-                const quantity = parseInt(row.querySelector('.manual-quantity').value) || 0;
-                const barcode = row.querySelector('.manual-barcode').value.trim();
+                const productNameInput = row.querySelector('.manual-product-name');
+                const packageCountInput = row.querySelector('.manual-package-count');
+                const quantityInput = row.querySelector('.manual-quantity');
 
-                if (productName || barcode || packageCount > 0 || quantity > 0) {
+                if (!productNameInput || !packageCountInput || !quantityInput) return;
+
+                const productName = productNameInput.value.trim();
+                const packageCount = parseInt(packageCountInput.value) || 0;
+                const quantity = parseInt(quantityInput.value) || 0;
+                const barcode = ""; // Barkod kaldırıldı, boş gönderiyoruz
+
+                if (productName || packageCount > 0 || quantity > 0) {
                     entries.push({ productName, packageCount, quantity, barcode });
                 }
             });
 
             if (entries.length === 0) {
-                alert('Lütfen en az bir satır veri giriniz.');
+                showAlert('Lütfen en az bir satır veri giriniz.', 'warning');
                 return;
             }
 
@@ -95,14 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (result.success) {
-                    alert(`${result.count} adet kayıt başarıyla eklendi.`);
+                    showAlert(`${result.count} adet kayıt başarıyla eklendi.`, 'success');
                     closeManualCargoModal();
                 } else {
-                    alert('Kayıt sırasında bir hata oluştu.');
+                    showAlert('Kayıt sırasında bir hata oluştu.', 'error');
                 }
             } catch (error) {
                 console.error('Save error:', error);
-                alert('Hata: ' + error.message);
+                showAlert('Hata: ' + error.message, 'error');
             } finally {
                 btnSaveManualCargo.disabled = false;
                 btnSaveManualCargo.textContent = 'Kaydet';
