@@ -49,7 +49,7 @@
             <!-- User Profile -->
             <!-- Logo -->
             <div class="p-4 mb-2 flex justify-center items-center">
-                <img src="./logo.jpeg" alt="PaketPilot Logo" class="w-48 h-auto object-contain rounded-md">
+                <img src="./logo.jpeg" alt="PaketPilot Logo" class="w-54 h-auto object-contain rounded-md">
             </div>
 
             <!-- Navigation -->
@@ -395,43 +395,12 @@
             </div>
 
             <!-- ANLIK TAKİP Section (Full Width at Bottom) -->
-            <div class="w-full h-1/3 border-t border-gray-200 bg-white flex flex-col">
+            <div class="w-full h-1/3 bg-white flex flex-col">
                 <!-- Title -->
                 <div class="px-4 py-3 border-b border-gray-100 bg-white">
                     <h3 class="text-xs font-bold text-red-600 uppercase tracking-wider">Anlık Takip</h3>
                 </div>
 
-                <!-- Toolbar Controls -->
-                <div
-                    class="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-2 relative z-30">
-
-
-                    <div class="flex-1"></div>
-
-                    <!-- Columns Dropdown -->
-                    <div class="relative group">
-                        <button id="cancels-columns-btn"
-                            class="flex items-center justify-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 px-2 py-1.5 rounded-md transition-colors border border-gray-200 shadow-sm"
-                            title="Columns">
-                            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                            </svg>
-                        </button>
-                        <!-- Dropdown Menu -->
-                        <div id="cancels-column-dropdown"
-                            class="hidden absolute right-0 mt-1 w-56 bg-white rounded-none shadow-xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
-                            <div class="p-2 border-b border-gray-100 bg-gray-50">
-                                <input type="text" placeholder="Search columns..."
-                                    class="w-full px-2 py-1 text-xs border border-gray-200 rounded-none focus:outline-none focus:border-blue-500">
-                            </div>
-                            <div id="cancels-column-list" class="max-h-64 overflow-y-auto p-1">
-                                <!-- Dynamic Columns -->
-                                <div class="px-2 py-1.5 text-xs text-gray-400 text-center">No data loaded</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Table Container (Cancels) -->
                 <div class="flex-1 overflow-auto min-h-0 custom-scrollbar relative z-0">
@@ -652,10 +621,6 @@
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-auto">
                                         Detaylar
                                     </th>
-                                    <th
-                                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 w-32">
-                                        Kaynak
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="archive-list-container" class="bg-white divide-y divide-gray-200">
@@ -691,6 +656,17 @@
                                                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
                                     </button>
+                                </div>
+
+                                <!-- Status Filter Dropdown (NEW) -->
+                                <div class="relative ml-2">
+                                    <select id="cancels-status-filter"
+                                        class="block w-full pl-3 pr-8 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-xs">
+                                        <option value="all">Tüm Durumlar</option>
+                                        <option value="shipped_cancel">Kargoya Verilen İptal</option>
+                                        <option value="preparation_cancel">Hazırlanırken İptal</option>
+                                        <option value="cancel">İptal</option>
+                                    </select>
                                 </div>
 
                                 <!-- Columns Button (with dropdown container) -->

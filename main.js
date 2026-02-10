@@ -250,16 +250,35 @@ ipcMain.handle('fetch-trendyol-orders', async (event, storeId) => {
                     data.content.forEach(pkg => {
                         if (pkg.lines && Array.isArray(pkg.lines)) {
                             pkg.lines.forEach(line => {
+                                // Format order date
+                                let orderDate = '';
+                                if (pkg.orderDate) {
+                                    const d = new Date(pkg.orderDate);
+                                    orderDate = d.toLocaleDateString('tr-TR');
+                                }
+
+                                // Customer name
+                                const customerName = `${pkg.customerFirstName || ''} ${pkg.customerLastName || ''}`.trim() || '-';
+
+                                // Cargo tracking number (Kargo Kodu)
+                                const cargoCode = pkg.cargoTrackingNumber || pkg.shipmentPackageNo || '-';
+
                                 mappedRows.push({
                                     'Paket No': pkg.id,
                                     'Sipariş Numarası': pkg.orderNumber,
+                                    'Müşteri Adı': customerName,
+                                    'Sipariş Tarihi': orderDate,
+                                    'Kargo Kodu': cargoCode,
+                                    'Kargo Firması': pkg.cargoProviderName || '-',
                                     'Sipariş Statüsü': pkg.status,
                                     'İl': pkg.shipmentAddress ? pkg.shipmentAddress.city : '',
+                                    'İlçe': pkg.shipmentAddress ? pkg.shipmentAddress.district : '',
                                     'Teslimat Adresi': pkg.shipmentAddress ? pkg.shipmentAddress.fullAddress : '',
                                     'Ürün Adı': line.productName,
                                     'Barkod': line.barcode,
                                     'Adet': line.quantity,
-                                    'Birim Fiyatı': line.amount
+                                    'Birim Fiyatı': line.amount,
+                                    'Fatura No': pkg.invoiceNumber || '-'
                                 })
                             })
                         }
@@ -1009,23 +1028,6 @@ ipcMain.handle('fetch-trendyol-cancelled', async (event, { storeId, startDate, e
                         }
                     })
                 }
-
-                // DUMMY DATA FOR TESTING (Step 416 Request) - Only add on first page
-                if (page === 0) {
-                    mappedRows.push({
-                        'orderNumber': '12933331383',
-                        'status': 'Cancelled',
-                        'productName': 'Test Ürünü (Arşivde Var)',
-                        'barcode': 'DUMMY_ARCHIVE_MATCH',
-                        'quantity': 1,
-                        'customer': 'Test Müşteri',
-                        'cargoTrackingNumber': '1234567890',
-                        'orderDate': Date.now() - 86400000,
-                        'statusDate': Date.now(),
-                        'reason': 'Test Reason'
-                    });
-                }
-
                 resolve({
                     success: true,
                     data: mappedRows,

@@ -63,6 +63,9 @@ let autoFetchInterval = null;
 let statusUpdateInterval = null;
 let lastFetchTime = null;
 
+// Deleted Orders Memory (to progressively simulate cancels)
+let deletedOrdersMemory = new Set(); // Stores order numbers that have been "deleted"
+
 // Helper to validate quantities between Source and Target
 function getValidationStatus() {
     const sourceData = importedDataState['source'];
@@ -460,6 +463,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnRefreshCancels) {
         btnRefreshCancels.addEventListener('click', () => loadTrendyolCancels());
     }
+    const cancelsStatusFilter = document.getElementById('cancels-status-filter');
+    if (cancelsStatusFilter) {
+        cancelsStatusFilter.addEventListener('change', () => loadTrendyolCancels());
+    }
     const btnCancelsPrev = document.getElementById('btn-cancels-prev');
     if (btnCancelsPrev) {
         btnCancelsPrev.addEventListener('click', () => changeCancelsPage(-1));
@@ -574,6 +581,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // FIX: Apply Filtering Logic (Shipped Orders)
                 tableData = await filterShippedOrders(tableData);
 
+                // === CRITICAL FIX: Save Previous Source Data for Cancel Detection ===
+                // Must be done BEFORE updating state
+                if (originalDataState['source'] && originalDataState['source'].length > 0) {
+                    previousRawSourceData = JSON.parse(JSON.stringify(originalDataState['source']));
+                    log.info('✓ Saved previous source data for cancel detection (' + (previousRawSourceData.length - 1) + ' orders)');
+                } else {
+                    log.info('First fetch - no previous data to compare');
+                }
+
                 // Update State
                 importedDataState['source'] = tableData;
                 originalDataState['source'] = JSON.parse(JSON.stringify(tableData));
@@ -596,13 +612,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Realtime Update Logic
                 handleSourceDataUpdate(tableData, true);
 
+                // CRITICAL: DO NOT DELETE THIS!
+                // Re-render Target after Source updates to refresh validation colors dynamically
+                // When Source data changes (orders decrease), Target colors must update automatically
+                if (importedDataState['target'] && importedDataState['target'].length > 0) {
+                    processAndRenderData('target');
+                }
+
                 // Sync to Target (if empty)
                 const targetData = importedDataState['target'];
                 if (!targetData || targetData.length <= 1) {
                     await syncSourceToSide('target');
                 }
 
-                // Detect Cancels
+                // Detect Cancels (NOW with proper previousRawSourceData)
                 await detectAndPopulateCancels();
 
                 log.info('Auto-fetch successful');
@@ -753,6 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         activeOperationState['target'] = null;
                         activeOperationState['cancels'] = null;
                         previousRawSourceData = null; // Clear previous source data
+                        deletedOrdersMemory.clear(); // Clear deleted orders memory
 
                         isPreparationStarted = false;
 
@@ -789,7 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         btnMarkShipped.classList.add('opacity-50', 'cursor-not-allowed');
 
                         log.info('Orders marked as shipped, cancels archived, and all tables cleared.');
-                        showAlert('İşlem başarıyla tamamlandı.\n\n✓ Siparişler kargo arşivine kaydedildi\n✓ İptaller arşivlendi\n✓ Tablolar temizlendi', 'success');
+                        showAlert('İşlem başarıyla tamamlandı.✓', 'success');
                     } catch (err) {
                         log.error('Error in mark shipped flow:', err);
                         showAlert('Bir hata oluştu: ' + err.message, 'error');
@@ -1380,8 +1404,11 @@ async function detectAndPopulateCancels() {
 
     if (prevOrderNoIdx === -1 || currOrderNoIdx === -1) {
         log.warn('Order number column not found in source data, cannot detect cancels');
+        log.warn(`Previous order column index: ${prevOrderNoIdx}, Current order column index: ${currOrderNoIdx}`);
         return;
     }
+
+    log.info(`📊 Starting cancel detection - Previous: ${previousRawSource.length - 1} orders, Current: ${currentRawSource.length - 1} orders`);
 
     // Build a Set of current order numbers for fast lookup
     const currentOrderNumbers = new Set();
@@ -1392,8 +1419,16 @@ async function detectAndPopulateCancels() {
         }
     }
 
-    // Find orders that existed in previous but missing in current
-    // Copy ALL columns from the cancelled orders
+    // Build a Set of previous order numbers
+    const previousOrderNumbers = new Set();
+    for (let i = 1; i < previousRawSource.length; i++) {
+        const orderNo = previousRawSource[i][prevOrderNoIdx];
+        if (orderNo) {
+            previousOrderNumbers.add(orderNo.toString().trim());
+        }
+    }
+
+    // Find CANCELLED orders (existed in previous, missing in current)
     const cancelledOrders = [];
     for (let i = 1; i < previousRawSource.length; i++) {
         const row = previousRawSource[i];
@@ -1404,7 +1439,6 @@ async function detectAndPopulateCancels() {
 
             // If this order number is NOT in current source, it's cancelled
             if (!currentOrderNumbers.has(orderNoStr)) {
-                // Get current timestamp for detection time
                 const now = new Date();
                 const detectionTime = now.toLocaleString('tr-TR', {
                     day: '2-digit',
@@ -1415,16 +1449,54 @@ async function detectAndPopulateCancels() {
                     second: '2-digit'
                 });
 
-                // Copy the ENTIRE row with ALL columns and add detection time at the beginning
-                const cancelRow = [detectionTime, ...row];
+                // Add: Detection Time, DURUM, then all original columns
+                const cancelRow = [detectionTime, 'Düştü', ...row];
                 cancelledOrders.push(cancelRow);
             }
         }
     }
 
-    // Add 'İptal Tespit Tarihi' as the first column header
-    const cancelsHeader = ['İptal Tespit Tarihi', ...prevHeaders];
-    const cancelsData = [cancelsHeader, ...cancelledOrders];
+    // Find NEW orders (in current, but not in previous)
+    const newOrders = [];
+    for (let i = 1; i < currentRawSource.length; i++) {
+        const row = currentRawSource[i];
+        const orderNo = row[currOrderNoIdx];
+
+        if (orderNo) {
+            const orderNoStr = orderNo.toString().trim();
+
+            // If this order number is NOT in previous source, it's new
+            if (!previousOrderNumbers.has(orderNoStr)) {
+                const now = new Date();
+                const detectionTime = now.toLocaleString('tr-TR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+
+                // Add: Detection Time, DURUM, then all original columns
+                const newRow = [detectionTime, 'Yeni', ...row];
+                newOrders.push(newRow);
+            }
+        }
+    }
+
+    // Add 'Tespit Tarihi' and 'DURUM' as the first columns
+    const cancelsHeader = ['Tespit Tarihi', 'DURUM', ...prevHeaders];
+
+    // APPEND to existing cancels instead of overwriting
+    let existingChanges = [];
+    if (importedDataState['cancels'] && importedDataState['cancels'].length > 1) {
+        // Keep existing changes (skip header)
+        existingChanges = importedDataState['cancels'].slice(1);
+    }
+
+    // Combine: existing + new cancelled orders + new orders
+    const allChanges = [...existingChanges, ...cancelledOrders, ...newOrders];
+    const cancelsData = [cancelsHeader, ...allChanges];
 
     importedDataState['cancels'] = cancelsData;
     originalDataState['cancels'] = JSON.parse(JSON.stringify(cancelsData));
@@ -1432,14 +1504,46 @@ async function detectAndPopulateCancels() {
     // Initialize cols
     let allIndices = cancelsHeader.map((_, index) => index);
     columnState['cancels'].indices = allIndices;
-    applyDefaultVisibility('cancels', cancelsHeader);
+
+    // SHOW ONLY SPECIFIC COLUMNS for Anlık Takip
+    // User wants: Tespit Tarihi, DURUM, Sipariş No, Müşteri Adı, Kargo Kodu, Ürün Adı, Sipariş Tarihi
+    const hiddenSet = new Set(allIndices); // Start with all hidden
+
+    // Find and show ONLY specific columns
+    cancelsHeader.forEach((header, idx) => {
+        if (!header) return;
+        const h = header.toString().toLowerCase().trim();
+
+        const shouldShow = (
+            h.includes('tespit tarihi') || h.includes('tespit') ||  // Tespit Tarihi
+            h === 'durum' || h.includes('status') ||  // DURUM
+            h.includes('paket no') || h.includes('paket numarası') ||  // Paket No
+            (h.includes('sipariş') && (h.includes('no') || h.includes('numara')) && !h.includes('statü')) ||  // Sipariş Numarası
+            h.includes('müşteri') || h.includes('customer') ||  // Müşteri Adı
+            h.includes('kargo kodu') || h.includes('cargo tracking') ||  // Kargo Kodu
+            (h.includes('ürün') && h.includes('adı')) || (h.includes('product') && h.includes('name')) ||  // Ürün Adı
+            (h.includes('sipariş') && h.includes('tarihi')) || h.includes('order date')  // Sipariş Tarihi
+        );
+
+        if (shouldShow) {
+            hiddenSet.delete(idx);
+        }
+    });
+
+    columnState['cancels'].hiddenIndices = hiddenSet;
+    log.info(`Anlık Takip table visibility: Showing ${allIndices.length - hiddenSet.size} / ${allIndices.length} columns`);
 
     // Render
     processAndRenderData('cancels');
     updateColumnDropdown('cancels', cancelsHeader);
-    log.info(`Detected ${cancelledOrders.length} cancelled orders by comparing order numbers.`);
-    log.info(`Cancels table headers (${cancelsHeader.length} columns):`, cancelsHeader);
-    log.info(`Hidden indices for cancels:`, Array.from(columnState['cancels'].hiddenIndices));
+
+    if (cancelledOrders.length > 0 || newOrders.length > 0) {
+        log.info(`📊 Detected ${cancelledOrders.length} cancelled, ${newOrders.length} new orders. Total in table: ${allChanges.length}`);
+    } else {
+        log.info(`✅ No changes detected`);
+    }
+    log.info(`Anlık Takip headers (${cancelsHeader.length} columns):`, cancelsHeader);
+    log.info(`Visible column indices:`, allIndices.filter(i => !hiddenSet.has(i)));
 }
 
 // --- FILE MANAGER LOGIC ---
@@ -1768,11 +1872,13 @@ function loadManualArchivePage() {
 }
 
 // Load Cancels Archive Page (only cancel type)
+
 function loadCancelsArchivePage() {
     if (!currentStore) return;
 
     const listContainer = document.getElementById('cancels-archive-list-container');
     const dateInput = document.getElementById('cancels-archive-date-filter');
+    const statusSelect = document.getElementById('cancels-status-filter'); // Select element
 
     if (!listContainer || !dateInput) return;
 
@@ -1788,55 +1894,134 @@ function loadCancelsArchivePage() {
     const { ipcRenderer } = require('electron');
     log.info(`Loading cancels archive for Date: ${date}`);
 
-    ipcRenderer.invoke('param-get-daily-entries', { storeId: currentStore.id, date, type: 'cancel' }).then(rows => {
+    // Fetch both 'cancel' (legacy) and 'cancels' (new) types if possible, or just 'cancels'
+    // For now, let's use 'cancels' as agreed in recent steps.
+    ipcRenderer.invoke('param-get-daily-entries', { storeId: currentStore.id, date, type: 'cancels' }).then(rows => {
         log.info(`Cancels archive rows found: ${rows.length}`);
+
         if (rows.length === 0) {
-            listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Bu tarihe ait iptal kaydı bulunamadı.</td></tr>';
+            // Try legacy type fallback
+            ipcRenderer.invoke('param-get-daily-entries', { storeId: currentStore.id, date, type: 'cancel' }).then(legacyRows => {
+                if (legacyRows.length > 0) {
+                    processRows(legacyRows);
+                } else {
+                    listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Bu tarihe ait iptal kaydı bulunamadı.</td></tr>';
+                    if (statusSelect) statusSelect.innerHTML = '<option value="all">Tüm Durumlar</option>';
+                }
+            });
             return;
         }
-        listContainer.innerHTML = '';
-        rows.forEach((row, rowIndex) => {
-            const dataSummary = Array.isArray(row.data) ? `${row.data.length - 1} iptal` : 'Veri detayları...';
-            let cancelStage = 'İptal';
-            if (Array.isArray(row.data) && row.data.length > 0) {
-                const headers = row.data[0];
-                const stageIdx = headers.findIndex(h => h && h.toString().toLowerCase().includes('iptal aşaması'));
-                if (stageIdx !== -1 && row.data.length > 1) {
-                    cancelStage = row.data[1][stageIdx] || 'İptal';
+
+        processRows(rows);
+
+        function processRows(dataRows) {
+
+
+
+            // --- STATUS COLLECTION ---
+            const allStatuses = new Set();
+            dataRows.forEach(row => {
+                if (row.data && Array.isArray(row.data) && row.data.length > 1) {
+                    const headers = row.data[0];
+                    // Find status column
+                    const statusIdx = headers.findIndex(h => h && ['durum', 'statü', 'kargo durumu', 'sipariş statüsü'].some(m => h.toString().toLowerCase().includes(m)));
+
+                    if (statusIdx !== -1) {
+                        for (let i = 1; i < row.data.length; i++) {
+                            const val = row.data[i][statusIdx];
+                            if (val) allStatuses.add(val.toString().trim());
+                        }
+                    }
+                }
+            });
+
+            // Populate Dropdown
+            if (statusSelect) {
+                const currentSelection = statusSelect.value;
+                let optionsHtml = '<option value="all">Tüm Durumlar</option>';
+                // Sort alphabetically
+                Array.from(allStatuses).sort().forEach(st => {
+                    optionsHtml += `<option value="${st}">${st}</option>`;
+                });
+                statusSelect.innerHTML = optionsHtml;
+                if (allStatuses.has(currentSelection)) {
+                    statusSelect.value = currentSelection;
                 }
             }
-            const uniqueId = `cancels-archive-detail-${rowIndex}`;
-            const tr = document.createElement('tr');
-            tr.className = 'border-b border-gray-200 hover:bg-gray-50';
-            tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${row.entry_date}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">${cancelStage}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dataSummary}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><button class="expand-detail-btn text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded" data-target="${uniqueId}"><svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>Detayları Göster</button></td><td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button class="text-red-600 hover:text-red-900 delete-daily-btn p-2 hover:bg-red-50 rounded" data-id="${row.id}">Sil</button></td>`;
-            listContainer.appendChild(tr);
-            const detailTr = document.createElement('tr');
-            detailTr.id = uniqueId;
-            detailTr.className = 'hidden bg-gray-50';
-            const tableResult = renderArchiveDetailTable(row.data, row.id, row.type);
-            detailTr.innerHTML = `
-    <td colspan="5" style="padding: 0; border: none; position: sticky; left: 0; z-index: 5;">
-        <div class="bg-white shadow-sm border-b border-gray-200" style="width: calc(100vw - 280px);">
-            <div class="overflow-x-auto w-full relative px-4 pb-4">
-                <div style="min-width: 100%; width: max-content;">
-                    ${tableResult.html}
-                </div>
-            </div>
-        </div>
-    </td>
-`;
-            listContainer.appendChild(detailTr);
-            if (tableResult.setup) { setTimeout(() => tableResult.setup(), 0); }
-        });
-    }).catch(err => {
+
+            // --- RENDER FUNC ---
+            const renderList = () => {
+                listContainer.innerHTML = '';
+                const selectedStatus = statusSelect ? statusSelect.value : 'all';
+
+                dataRows.forEach((row, rowIndex) => {
+                    const dataSummary = Array.isArray(row.data) ? `${row.data.length - 1} kayıt` : 'Veri detayları...';
+                    let cancelStage = 'İptal'; // Default
+
+                    const uniqueId = `cancels-archive-detail-${rowIndex}`;
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+                    tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${row.entry_date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">${cancelStage}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dataSummary}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button class="expand-detail-btn text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded" data-target="${uniqueId}">
+                            <svg class="w-4 h-4 inline-block transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                            Detayları Göster
+                        </button>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-red-600 hover:text-red-900 delete-daily-btn p-2 hover:bg-red-50 rounded" data-id="${row.id}">Sil</button>
+                    </td>`;
+
+                    listContainer.appendChild(tr);
+
+                    const detailTr = document.createElement('tr');
+                    detailTr.id = uniqueId;
+                    detailTr.className = 'hidden bg-gray-50';
+
+                    // PASS FILTER TO RENDERER
+                    const tableResult = renderArchiveDetailTable(row.data, row.id, row.type, selectedStatus); // Pass status filter
+
+                    detailTr.innerHTML = `
+                        <td colspan="5" style="padding: 0; border: none; position: sticky; left: 0; z-index: 5;">
+                            <div class="bg-white shadow-sm border-b border-gray-200" style="width: calc(100vw - 280px);">
+                                <div class="overflow-x-auto w-full relative px-4 pb-4">
+                                    <div style="min-width: 100%; width: max-content;">
+                                        ${tableResult.html}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    listContainer.appendChild(detailTr);
+                    if (tableResult.setup) { setTimeout(() => tableResult.setup(), 0); }
+                });
+            }
+
+            // Initial Render
+            renderList();
+
+            // Setup Change Listener
+            if (statusSelect) {
+                // Remove old listeners to prevent duplicates (simple assignment works here as we re-run this function)
+                statusSelect.onchange = renderList;
+            }
+        }
+
+    } // Close then block
+
+    ).catch(err => {
         console.error('Cancels Archive Load Error:', err);
         listContainer.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Hata oluştu.</td></tr>';
     });
 }
 
 // Helper function to render detailed archive data table with edit capability
-function renderArchiveDetailTable(data, archiveId, archiveType) {
+function renderArchiveDetailTable(data, archiveId, archiveType, statusFilter = 'all') {
     if (!Array.isArray(data) || data.length === 0) {
         return { html: '<p class="text-sm text-gray-500">Veri bulunamadı.</p>', setup: null };
     }
@@ -1850,15 +2035,19 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
 
     // --- 1. Column Analysis & Visibility Logic ---
 
-    // Exact or reliable matchers for the columns user explicitly wants
+    // Default VISIBLE columns based on user's screenshot
+    // Order: Sipariş No, Sipariş Statüsü, Ürün Adı, Müşteri Adı, Kargo Kodu, Adet, Paket No, Sipariş Tarihi, Birim Fiyatı
     const desiredOrder = [
         { key: 'order_no', matches: ['sipariş numarası', 'sipariş no', 'order number', 'siparis no', 'sipariş numarasi'] },
-        { key: 'status', matches: ['kargo durumu', 'durum', 'statü', 'kargo status'] },
+        { key: 'status', matches: ['sipariş statüsü', 'kargo durumu', 'durum', 'statü', 'kargo status'] },
         { key: 'product_name', matches: ['ürün adı', 'ürün ismi', 'product name'] },
-        { key: 'receiver', matches: ['alıcı', 'alıcı adı', 'müşteri', 'müşteri adı', 'receiver'] },
-        { key: 'barcode', matches: ['barkod', 'barcode'] },
+        { key: 'customer', matches: ['müşteri adı', 'müşteri', 'alıcı', 'alıcı adı', 'receiver'] },
         { key: 'tracking', matches: ['kargo kodu', 'kargo takip', 'takip no', 'gönderi kodu'] },
-        { key: 'quantity', matches: ['adet', 'miktar', 'quantity', 'paket sayısı', 'adet sayısı', 'müşteri sipariş ededi'] }
+        { key: 'quantity', matches: ['adet', 'miktar', 'quantity', 'adet sayısı', 'müşteri sipariş ededi'] },
+        { key: 'package_no', matches: ['paket no', 'paket numarası', 'package no'] },
+        { key: 'order_date', matches: ['sipariş tarihi', 'order date', 'tarih'] },
+        { key: 'price', matches: ['birim fiyatı', 'fiyat', 'price', 'tutar'] }
+        // NOTE: Removed 'barcode' and 'source' from default visible list
     ];
 
     // Helper: Strict(er) matching to avoid "Alıcı - Adres" matching "Alıcı"
@@ -1918,6 +2107,13 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
         }
     });
 
+    // Determine Status Column Index for Filtering
+    let statusColIndex = -1;
+    if (statusFilter !== 'all') {
+        const statusKeywords = ['durum', 'statü', 'kargo durumu', 'sipariş statüsü'];
+        statusColIndex = headers.findIndex(h => h && statusKeywords.some(m => h.toString().toLowerCase().includes(m)));
+    }
+
     const tableId = `archive-table-${archiveId}`;
     // --- 2. Build HTML ---
 
@@ -1942,26 +2138,46 @@ function renderArchiveDetailTable(data, archiveId, archiveType) {
     // Render Data Rows
     rows.forEach((row, rowIndex) => {
         if (!row || row.length === 0) return;
+
+        // FILTER LOGIC
+        if (statusFilter !== 'all' && statusColIndex !== -1) {
+            const val = row[statusColIndex];
+            if (!val || val.toString().trim() !== statusFilter) {
+                return; // Skip this row
+            }
+        }
+
         tableHTML += '<tr class="hover:bg-gray-50">';
 
         orderedColumns.forEach((col, idx) => {
             const style = col.visible ? '' : 'display: none !important;';
             const cellValue = row[col.originalIndex] !== undefined && row[col.originalIndex] !== null ? row[col.originalIndex] : '';
 
+            // Make editable only if it's one of the quantity columns (handled by editableIndices)
             if (editableIndices.has(col.originalIndex)) {
                 tableHTML += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap editable-cell cursor-pointer hover:bg-blue-50 col-cell-${idx}" style="${style}" data-row="${rowIndex}" data-col="${col.originalIndex}" title="Düzenlemek için tıklayın"><span class="cell-value">${cellValue}</span></td>`;
             } else {
                 let displayVal = cellValue;
-                if (typeof cellValue === 'string' && cellValue.toLowerCase().trim() === 'kargoya verildi') {
+                // Special styling for "Kargoya Verildi"
+                if (typeof cellValue === 'string' && ['kargoya verildi', 'shipped'].includes(cellValue.toLowerCase().trim())) {
                     displayVal = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                        <svg class="mr-1.5 h-2 w-2 text-green-400" fill="currentColor" viewBox="0 0 8 8">
-                            <circle cx="4" cy="4" r="3" />
-                        </svg>
-                        ${cellValue}
-                    </span>`;
+                                <svg class="mr-1.5 h-2 w-2 text-green-400" fill="currentColor" viewBox="0 0 8 8">
+                                    <circle cx="4" cy="4" r="3" />
+                                </svg>
+                                ${cellValue}
+                            </span>`;
                 }
-                const titleVal = typeof cellValue === 'string' ? cellValue.replace(/"/g, '&quot;') : cellValue;
-                tableHTML += `<td class="px-4 py-2 text-sm text-gray-900 truncate max-w-[12ch] cursor-pointer hover:bg-blue-50 transition-colors col-cell-original-${col.originalIndex}" style="${style}" ondblclick="toggleCellExpand(this)" title="${titleVal}">${displayVal}</td>`;
+                // Special styling for "Düştü" / "Cancelled"
+                else if (typeof cellValue === 'string' && ['düştü', 'cancelled', 'iptal'].includes(cellValue.toLowerCase().trim())) {
+                    displayVal = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                <svg class="mr-1.5 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                                ${cellValue}
+                            </span>`;
+                }
+
+                tableHTML += `<td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap col-cell-${idx}" style="${style}">${displayVal}</td>`;
             }
         });
 
@@ -3369,8 +3585,19 @@ function processAndRenderData(side) {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0';
 
-        // Red Text Logic for Manual Entries in Cancels
+        // DURUM-based row coloring for Anlık Takip (cancels)
         if (side === 'cancels') {
+            const durumIndex = headers.findIndex(h => h && h.toString().toLowerCase().trim() === 'durum');
+            if (durumIndex !== -1 && row[durumIndex]) {
+                const durum = row[durumIndex].toString().trim();
+                if (durum === 'Düştü') {
+                    tr.classList.add('bg-red-50', 'hover:bg-red-100/50');
+                } else if (durum === 'Yeni') {
+                    tr.classList.add('bg-green-50', 'hover:bg-green-100/50');
+                }
+            }
+
+            // Red Text Logic for Manual Entries in Cancels
             const metaIndex = headers.findIndex(h => h === '__meta_manual__');
             if (metaIndex !== -1 && row[metaIndex] == '1') {
                 tr.classList.add('text-red-600', 'font-medium');
@@ -3508,30 +3735,48 @@ function processAndRenderData(side) {
 
             // Only append innerDiv if we're NOT showing an input directly
             if (!(isEditable && side === 'target' && isPreparationStarted)) {
-                const innerDiv = document.createElement('div');
-                innerDiv.className = 'fade-text';
-                innerDiv.textContent = cellVal;
-                if (!isEditable) innerDiv.title = cellVal;
+                // Special rendering for DURUM column in Anlık Takip
+                const durumIndex = headers.findIndex(h => h && h.toString().toLowerCase().trim() === 'durum');
+                if (side === 'cancels' && index === durumIndex && cellVal) {
+                    const label = document.createElement('span');
+                    label.textContent = cellVal;
+                    label.className = 'inline-block px-3 py-1 text-xs font-semibold rounded-full';
 
-                // --- CELL SPECIFIC COLORING for TARGET ---
-                if (side === 'target') {
-                    if (index === paketSayisiIndex) {
-                        if (!rowStatus.validPacket) {
-                            innerDiv.classList.add('text-red-600', 'font-bold');
-                        }
-                    } else if (index === adetSayisiIndex) {
-                        if (!rowStatus.validPiece) {
-                            innerDiv.classList.add('text-red-600', 'font-bold');
-                        }
+                    if (cellVal.trim() === 'Düştü') {
+                        label.classList.add('bg-red-100', 'text-red-800');
+                    } else if (cellVal.trim() === 'Yeni') {
+                        label.classList.add('bg-green-100', 'text-green-800');
+                    } else {
+                        label.classList.add('bg-gray-100', 'text-gray-800');
                     }
+
+                    td.appendChild(label);
                 } else {
-                    // For Source or others, keep existing logic for Package Count if present
-                    if (index === paketSayisiIndex || index === adetSayisiIndex) {
-                        innerDiv.classList.add('text-green-600', 'font-bold', 'bg-green-50', 'inline-block', 'px-2', 'rounded-full');
-                    }
-                }
+                    const innerDiv = document.createElement('div');
+                    innerDiv.className = 'fade-text';
+                    innerDiv.textContent = cellVal;
+                    if (!isEditable) innerDiv.title = cellVal;
 
-                td.appendChild(innerDiv);
+                    // --- CELL SPECIFIC COLORING for TARGET ---
+                    if (side === 'target') {
+                        if (index === paketSayisiIndex) {
+                            if (!rowStatus.validPacket) {
+                                innerDiv.classList.add('text-red-600', 'font-bold');
+                            }
+                        } else if (index === adetSayisiIndex) {
+                            if (!rowStatus.validPiece) {
+                                innerDiv.classList.add('text-red-600', 'font-bold');
+                            }
+                        }
+                    } else {
+                        // For Source or others, keep existing logic for Package Count if present
+                        if (index === paketSayisiIndex || index === adetSayisiIndex) {
+                            innerDiv.classList.add('text-green-600', 'font-bold', 'bg-green-50', 'inline-block', 'px-2', 'rounded-full');
+                        }
+                    }
+
+                    td.appendChild(innerDiv);
+                }
             }
             tr.appendChild(td);
         });
@@ -4222,16 +4467,22 @@ async function loadTrendyolCancels() {
         // Initialize Columns Menu
         setupCancelsColumnsMenu();
 
+        // Initialize status filter
+        const statusFilterEl = document.getElementById('cancels-status-filter');
+        const statusFilter = statusFilterEl ? statusFilterEl.value : 'all';
+
         trendyolCancels.forEach(item => {
             const orderNo = String(item.orderNumber).trim();
             let status = 'İptal';
             let statusColor = 'text-red-600 bg-red-100';
+            let statusKey = 'cancel'; // Default key
             let actionHtml = '';
 
             // Comparison Logic
             if (cargoMap.has(orderNo)) {
                 status = 'Kargoya Verilen İptal';
                 statusColor = 'text-orange-700 bg-orange-100';
+                statusKey = 'shipped_cancel';
                 const entry = cargoMap.get(orderNo);
                 actionHtml = `
                     <label class="flex items-center space-x-1 cursor-pointer" title="İade Al">
@@ -4243,6 +4494,7 @@ async function loadTrendyolCancels() {
             } else if (cancelMap.has(orderNo)) {
                 status = 'Hazırlanırken İptal';
                 statusColor = 'text-gray-600 bg-gray-100';
+                statusKey = 'preparation_cancel';
                 const entry = cancelMap.get(orderNo);
                 actionHtml = `
                     <label class="flex items-center space-x-1 cursor-pointer" title="Listeden Sil">
@@ -4251,6 +4503,11 @@ async function loadTrendyolCancels() {
                         <span class="text-xs text-gray-600">Sil</span>
                     </label>
                 `;
+            }
+
+            // Apply Filter
+            if (statusFilter !== 'all' && statusFilter !== statusKey) {
+                return;
             }
 
             const tr = document.createElement('tr');

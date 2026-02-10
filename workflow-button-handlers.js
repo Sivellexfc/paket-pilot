@@ -75,9 +75,42 @@ if (btnMarkShipped) {
         if (!confirmed) return;
 
         try {
-            // Save to daily archive
+            // Save Target (Kargo Durumları) to daily archive
             const archiveType = 'cargo';
             await saveToDailyArchive(archiveType, targetData);
+
+            // CRITICAL: Filter and save ONLY cancelled orders (DURUM = "Düştü")
+            const cancelsData = importedDataState['cancels'];
+            if (cancelsData && cancelsData.length > 1) {
+                const headers = cancelsData[0];
+
+                // Find DURUM column index
+                const durumIndex = headers.findIndex(h => h && h.toString().toLowerCase().trim() === 'durum');
+
+                if (durumIndex !== -1) {
+                    // Filter: Keep only rows where DURUM = "Düştü"
+                    const onlyDroppedOrders = [headers]; // Start with headers
+
+                    for (let i = 1; i < cancelsData.length; i++) {
+                        const row = cancelsData[i];
+                        const durum = row[durumIndex];
+
+                        if (durum && durum.toString().trim() === 'Düştü') {
+                            onlyDroppedOrders.push(row);
+                        }
+                    }
+
+                    // Save only if there are dropped orders
+                    if (onlyDroppedOrders.length > 1) {
+                        await saveToDailyArchive('cancels', onlyDroppedOrders);
+                        log.info(`Saved ${onlyDroppedOrders.length - 1} dropped orders to daily archive`);
+                    } else {
+                        log.info('No dropped orders to save');
+                    }
+                } else {
+                    log.warn('DURUM column not found in cancels data');
+                }
+            }
 
             alert('Kargolar başarıyla kaydedildi.');
             log.info('Cargo data saved to daily archive');
